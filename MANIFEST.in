@@ -1,0 +1,12 @@
+include MANIFEST.in
+include LICENSE.txt
+include README.rst
+include setup.py
+include requirements.txt
+include automator/*.ini
+include automator/*.ui
+include automator/icons/*.png
+include zorro/scripts/*.py
+
+
+

@@ -1,0 +1,7 @@
+[console_scripts]
+zorro = zorro.__main__:main
+
+[gui_scripts]
+automator = automator.__main__:main
+ims = zorro.zorro_plotting:main
+
