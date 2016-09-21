@@ -49,10 +49,15 @@ scalar_constant_types = tuple(scalar_constant_types)
 
 #from numexprz import interpreter
 #import interpreter
+
 if sys.version_info[0] < 3:
-    from numexpr import interpreter
+    from numexprz import interpreter
 else:
     from . import interpreter
+#try:
+#    from numexprz import interpreter
+#except:
+#    from . import interpreter
 
 
 class Expression(object):

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'Ui_ViewWidget.ui'
 #
-# Created: Tue Aug 23 17:35:32 2016
+# Created: Wed Sep 21 13:03:12 2016
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -44,7 +44,7 @@ class Ui_ViewWidget(object):
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("icons/application-resize.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.tbPopoutView.setIcon(icon)
-        self.tbPopoutView.setCheckable(True)
+        self.tbPopoutView.setCheckable(False)
         self.tbPopoutView.setObjectName("tbPopoutView")
         self.horizontalLayout_5.addWidget(self.tbPopoutView)
         self.tbLive = QtGui.QToolButton(self.frameTopV)

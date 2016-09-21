@@ -133,7 +133,8 @@ def edge_mask( maskShape=[2048,2048], edges=[64,64,64,64] ):
     edgemask = np.reshape( edgemask, [1, edgemask.shape[0], edgemask.shape[1]]).astype( 'bool' )
     return edgemask
 
-@static_var( "rfloor", 0 )
+@static_var( "rfloor", None )
+@static_var( "rceil", None )
 @static_var( "rmax", 0 )
 @static_var( "remain", 0 )
 @static_var( "remain_n", 0 )
@@ -176,7 +177,8 @@ def rotmean( mage ):
         
         rotmean.remain = rmesh - rotmean.rfloor
         # Make rfloor into an index look-up table
-        rotmean.rfloor = rotmean.rfloor.astype(np.int).ravel()
+        rotmean.rfloor = rotmean.rfloor.ravel().astype('int')
+        rotmean.rceil = (rotmean.rfloor+1).astype('int')
         
         # Ravel
         rotmean.remain = rotmean.remain.ravel()
@@ -189,7 +191,7 @@ def rotmean( mage ):
 #        rotmean.weights[ (rotmean.rfloor+1) ] = rotmean.remain
 #        rotmean.weights += weights_n
         
-        rotmean.weights = np.bincount( rotmean.rfloor+1, rotmean.remain ) + np.bincount( rotmean.rfloor, rotmean.remain_n, minlength=rotmean.rmax  )
+        rotmean.weights = np.bincount( rotmean.rceil, rotmean.remain ) + np.bincount( rotmean.rfloor, rotmean.remain_n, minlength=rotmean.rmax  )
         rotmean.raxis = np.arange(0,rotmean.weights.size)
     else:
         # Same size image as previous time
@@ -211,7 +213,7 @@ def rotmean( mage ):
     
     # Add one to indexing array and add positive remainders to next-neighbours in sum
     #rmean[ (rotmean.rfloor+1) ] += mage_p
-    rmean = np.bincount( rotmean.rfloor+1, mage_p ) + np.bincount( rotmean.rfloor, mage_n, minlength=rotmean.rmax  )
+    rmean = np.bincount( rotmean.rceil, mage_p ) + np.bincount( rotmean.rfloor, mage_n, minlength=rotmean.rmax  )
     
     # sum
     # rmean += rmean_n
@@ -772,8 +774,17 @@ def logistic( peaksAxis, SigmaThres, K, Nu):
 def minLogistic( x, hSigma, cdfPeaksig ):
     return np.float32( np.sum( np.abs( cdfPeaksig - (1.0 - 1.0 / (1.0 + np.exp( -x[1]*(-hSigma + x[0]) ) )**np.float64(x[2])   )) ) )
             
-def which(program):
+def which( program ):
+    # Tries to locate a program 
     import os
+    if os.name == 'nt':
+        program_ext = os.path.splitext( program )[1]
+        if program_ext == "":
+            prog_exe = which( program + ".exe" )
+            if prog_exe != None:
+                return prog_exe
+            return which( program + ".com" )
+            
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 

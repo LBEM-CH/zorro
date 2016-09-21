@@ -42,6 +42,8 @@ import numpy as np
 #from collections import OrderedDict
 import skimage.io
 from zorro import plot as zplt
+import subprocess
+import tempfile
 
 # How to design custom controls with PyQT:
 # http://doc.qt.digia.com/qq/qq26-pyqtdesigner.html
@@ -98,10 +100,12 @@ class MplCanvas(FigureCanvas,object):
         if 'figFRC' in self._zorroObj.files:
             self.pixmapDict[u'Fourier Ring Correlation'] = os.path.join( baseDir, self._zorroObj.files['figFRC'] )
         
-    def __init__(self, parent=None, width=4, height=4, dpi=72):
+    def __init__(self, parent=None, width=4, height=4, plot_dpi=72, image_dpi=250):
         
         object.__init__(self)
-        self.plotObj = zplt.zorroPlot( width=width, height=height, dpi=dpi, facecolor=[0,0,0,0], MplCanvas=self )
+        self.plotObj = zplt.zorroPlot( width=width, height=height, 
+                                      plot_dpi=plot_dpi, image_dpi=image_dpi,
+                                      facecolor=[0,0,0,0], MplCanvas=self )
         FigureCanvas.__init__(self, self.plotObj.fig)
         
         
@@ -110,6 +114,7 @@ class MplCanvas(FigureCanvas,object):
         self.cmap = 'gray'
         self._zorroObj = None
         
+        self.plotName = None
         self.live = True # Whether to re-render the plots with each update event or use a rendered graphics-file loaded from disk
         self.PixmapName = None
         self.Pixmap = None
@@ -150,7 +155,39 @@ class MplCanvas(FigureCanvas,object):
         # self.setSizePolicy(self, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         self.updateGeometry()
         
-
+    ##### 2DX VIEW #####
+    def exportTo2dx( self ):
+        # Write a params file
+        #paramFile = tempfile.mktemp()
+        #with open( paramFile, 'w' ):
+        #    pass
+        
+        # Temporary directory that we can delete?  We could use tempfile
+    
+        # Invoke
+        #subprocess.Popen( "2dx_viewer -p %s %s" % (paramFile) )
+        # When to delete paramFile?
+        if self.plotName == u'Dose filtered sum':
+            realPath = os.path.realpath( self._zorroObj.files['filt'] )
+            subprocess.Popen( "2dx_viewer %s" % (realPath), shell=True )
+        elif self.plotName == u'Image sum':
+            realPath = os.path.realpath( self._zorroObj.files['sum'] )
+            subprocess.Popen( "2dx_viewer %s" % (realPath), shell=True )
+        else:
+            print( "Unsupported plot function for 2dx_viewer" )
+        pass
+    
+    def exportToIms( self ):
+        if self.plotName == u'Dose filtered sum':
+            realPath = os.path.realpath( self._zorroObj.files['filt'] )
+            subprocess.Popen( "ims %s" % (realPath), shell=True )
+        elif self.plotName == u'Image sum':
+            realPath = os.path.realpath( self._zorroObj.files['sum'] )
+            subprocess.Popen( "ims %s" % (realPath), shell=True )
+        else:
+            print( "Unsupported plot function for ims" )
+        pass
+    
     ##### LIVE VIEW #####
     def livePlot(self, plotName ):
         print( "called livePlot" )
@@ -313,6 +350,7 @@ class MplCanvas(FigureCanvas,object):
         
         # print( "plotName = " + str(plotName) +", zorroObj = " + str(newZorroObj) )
         try:
+            self.plotName = plotName
             self.currPlotFunc = self.plotFuncs[ plotName ]
         except KeyError:
             raise KeyError( "automator.MplCanvas.updatePlotFunc: Plot type not found in plotDict: %s" % plotName )
@@ -330,48 +368,3 @@ class MplCanvas(FigureCanvas,object):
         self.draw()
 
 
-#class ApplicationWindow(QtGui.QMainWindow):
-#    def __init__(self):
-#        QtGui.QMainWindow.__init__(self)
-#        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-#        self.setWindowTitle("application main window")
-#
-#        self.file_menu = QtGui.QMenu('&File', self)
-#        self.file_menu.addAction('&Quit', self.fileQuit,
-#                                 QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
-#        self.menuBar().addMenu(self.file_menu)
-#
-#        self.help_menu = QtGui.QMenu('&Help', self)
-#        self.menuBar().addSeparator()
-#        self.menuBar().addMenu(self.help_menu)
-#
-#        self.help_menu.addAction('&About', self.about)
-#
-#        self.main_widget = QtGui.QWidget(self)
-#
-#        l = QtGui.QVBoxLayout(self.main_widget)
-#        sc = TwodxPlotMplCanvas(self.main_widget, width=5, height=4, dpi=100)
-#        dc = TwodxImageMplCanvas(self.main_widget, width=5, height=4, dpi=100)
-#        l.addWidget(sc)
-#        l.addWidget(dc)
-#
-#        self.main_widget.setFocus()
-#        self.setCentralWidget(self.main_widget)
-#
-#        self.statusBar().showMessage("All hail matplotlib!", 2000)
-#
-#    def fileQuit(self):
-#        self.close()
-#
-#    def closeEvent(self, ce):
-#        self.fileQuit()
-#
-#    def about(self):
-#        QtGui.QMessageBox.about(self, "About",
-# 
-#qApp = QtGui.QApplication(sys.argv)
-#
-#aw = ApplicationWindow()
-#aw.show()
-#sys.exit(qApp.exec_())
-##qApp.exec_()

@@ -17,8 +17,8 @@ os.environ.setdefault('QT_API','pyside')
 
 dirname = os.path.dirname(__file__)
 
-from .Automator import progversion
-__version__ = progversion
+from .__version__ import __version__
+
 
 from .zorroSkulkManager import (skulkHost, skulkHeap, skulkPaths, skulkManager, zorroState)
 from .Automator import (Automator, main)

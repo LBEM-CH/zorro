@@ -10,16 +10,21 @@ python setup.py bdist_wheel
 python setup.py sdist
 
 # SDIST
-cp "dist/zorro-$version.tar.gz" "/mnt/qnap01/Robert_McLeod/build_zorro/"
+cp "dist/zorroautomator-$version.tar.gz" "/mnt/qnap01/Robert_McLeod/build_zorro/"
 
 # BC2
-rsync -v "dist/zorro-$version.tar.gz" mcleod@login2.bc2.unibas.ch:~/
-ssh mcleod@login2.bc2.unibas.ch "~/bin/reinstallZorro.bash $version"
+rsync -v "dist/zorroautomator-$version.tar.gz" mcleod@login2.bc2.unibas.ch:~/
+ssh mcleod@login2.bc2.unibas.ch "~/bin/reinstallZorro27.bash $version"
+ssh mcleod@login2.bc2.unibas.ch "~/bin/reinstallZorro34.bash $version"
+
 
 # LOC-CLUSTER
-rsync -v "dist/zorro-$version.tar.gz" lcluster@ram.ethz.ch:~/
+rsync -v "dist/zorroautomator-$version.tar.gz" lcluster@ram.ethz.ch:~/
 ssh  -t lcluster@ram.ethz.ch ssh loc-login "~/bin/reinstallZorro.bash $version"
 
 # D-BSSE
-cp "dist/zorro-$version"-cp34*.whl /mnt/qnap01/Robert_McLeod/build_zorro/
-ssh rmcleod@bs-gpu04 "~/bin/reinstallZorro.bash $version"
+#cp "dist/zorroautomator-$version"-cp34*.whl /mnt/qnap01/Robert_McLeod/build_zorro/
+# I can't use the wheel because the RHEL is only Qt 4.8.5
+ssh rmcleod@bs-gpu04 "~/bin/reinstallZorro34.bash $version"
+ssh rmcleod@bs-gpu04 "~/bin/reinstallZorro27.bash $version"
+

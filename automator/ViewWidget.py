@@ -34,6 +34,7 @@ import functools
 #from . import MplCanvas
 import matplotlib.image
 from . import Ui_ViewWidget
+from zorro.zorro_util import which
 
 class ViewWidget(QtGui.QWidget, Ui_ViewWidget.Ui_ViewWidget, object):
     
@@ -71,7 +72,8 @@ class ViewWidget(QtGui.QWidget, Ui_ViewWidget.Ui_ViewWidget, object):
         
         self.parent = parent # This is generally not what I need, what I need is the Automator object
         self.autoParent = None # Set by hand in the Automator.__init__() function
-        self.popout = None
+        self.popout = "2dx_viewer"
+        self.__popoutObj = None
 
         self.viewNumber = 0
         self._live = True
@@ -104,7 +106,7 @@ class ViewWidget(QtGui.QWidget, Ui_ViewWidget.Ui_ViewWidget, object):
         self.tbToggleColorbar.toggled.connect( self.toggleColorbar )
         self.tbChangeColormap.clicked.connect( self.cycleColormap )
         self.tbLogIntensity.toggled.connect( self.toggleLogInt )
-        self.tbPopoutView.toggled.connect( self.popoutViewDialog )
+        self.tbPopoutView.clicked.connect( self.popoutViewDialog )
         self.tbLive.toggled.connect( self.toggleLiveView )
         self.sbHistogramCutoff.valueChanged.connect( self.updateHistClim )
         
@@ -210,14 +212,22 @@ class ViewWidget(QtGui.QWidget, Ui_ViewWidget.Ui_ViewWidget, object):
         self.viewCanvas.updatePlotFunc( self.comboView.currentText() )
         
     def popoutViewDialog( self ):
-        if self.popout == None:
-            self.popout = ViewDialog()
-            self.copyDeep( self.popout.view ) # ViewDialog is just a wrapper around ViewWidget 'view'
-            self.popout.view.tbPopoutView.setEnabled(False)
-        elif self.popout != None:
-            self.popout.close()
-            self.popout = None
-        pass
+        """
+        So the logic here has 
+        """
+        if (self.viewCanvas.plotName == u'Dose filtered sum' 
+            or self.viewCanvas.plotName == u'Image sum'):
+            if self.popout == "2dx_viewer" and which( "2dx_viewer" ):
+                self.viewCanvas.exportTo2dx()
+                return
+            elif self.popout == "ims" and which( "ims" ):
+                self.viewCanvas.exportToIms()
+                return
+        
+        # Fallback mode
+        self.__popoutObj = ViewDialog()
+        self.copyDeep( self.__popoutObj.view ) # ViewDialog is just a wrapper around ViewWidget 'view'
+
     
     # Unfortunately the copy library doesn't work nicely with Qt, so we have to implement this.
     def copyDeep( self, thecopy ):
@@ -316,7 +326,6 @@ class ViewWidget(QtGui.QWidget, Ui_ViewWidget.Ui_ViewWidget, object):
         config.set( groupstring, u'showBoxes', self.tbShowBoxes.isChecked() )
         
         # We can only save some plotDict keys because it might contain a lot of data!
-        print( "TODO: save some specific information from plotDict" )
         try: config.set( groupstring, u'image_cmap', self.viewCanvas.plotObj.plotDict['image_cmap'] )
         except: pass
         try: config.set( groupstring, u'graph_cmap', self.viewCanvas.plotObj.plotDict['graph_cmap'] )

@@ -1,0 +1,68 @@
+CHANGELOG
+=======
+
+ZORRO 0.7.1b0
+=======
+
+* Prototype MRCZ/MRCSZ format using multicore blosc compressor.  External utilities
+  to convert back to MRC are on the TODO list.  Set compression options (code and 
+  compression level) in the paths dialog.  It's not recommended for normal use yet.
+* Removed unimplemented menubar items from Automator.
+* Automator backend re-factored for unique ids for all items.  Remove and reprocess
+  are much more stable now.  Projects can be stopped and restarted now at a later
+  date without trouble.
+* Fixed bug in hot pixel filter that could result in a crash if the image was 
+  already histogram normalized.
+* Status in the image display is now shown as a Tooltip.
+* Fixed bugs with 4-bit MRC handling that was casting to float-64.
+* Start of drift tracking in translations plot is indicated with a purple dot.
+* Pop-ups now try to open with 2dx_viewer if it can be found in the system path.  
+  If 2dx_viewer is not available, it uses zorro_plotting.ims instead.
+* Fixed bug on Windows with relative pathing, for example if the cache was on C:\Temp
+  and the current working directory on E:\Automator, the relative path could not be made.
+* Errors raised in Zorro (i.e. trying to stack align a 2D image) should now propagate to 
+  Automator and display as being in an error state.  They will no longer occupy 
+  any queues or be further processed.
+* Fixed GCTF calls not deleting all temporary files written by GCTF.
+* IMS now has some additional features, "F" for FFT, "y" for polar transform, 
+  'g' for Gaussian filter, for example.  See the help text under the help menu for 
+  keyboard shortcuts.
+* There is now an option to display debugging output under advanced options at 
+  very bottom
+* gctfHistogramFilter() in ReliablePy can be used to threshold results based on their GCTF 
+  parameters.  Histograms for defocus, astigmatism, figure-of-merit, and fit resolution are generated.
+  Also available as a script on SciCore: /scicore/projects/scicore-p-structsoft/scripts/gctfHisto.py
+* Added some light low-passing of rendered large images (>3k) and FFTs to increase contrast.
+* Fixed bug in Automator existing logs status disappearing after starting/stopping cycles.
+
+
+ZORRO 0.7.0b0
+=======
+
+* Added support for 4-bit MRC images using the 101-type from SerialEM
+* Added support for gain reference normalization.  The user is responsible for 
+passing the Vertical, Horizontal, and Diagonal flips set in GMS at present.  The 
+default is to rotate the gain reference by 180 degrees, which appears to be the norm
+for Titan Krios equipped with a K2 on a GIF.
+* Added stocastic hot pixel suppression.  It's highly advisable to use it with SerialEM acquired 
+data, by adding 'hot' to the `filterMode`, e.g. `filterMode='hot,dose,background'`.
+* Added support for CTFFIND4.1.  Because it is now very stable we recommend it, 
+and it is the default for `CTFProg='ctffind'`.  CTFIND4.0 can be called as 
+`CTFProg='ctffind4'`.  Default box shape for CTFFIND is now [1024,1024]
+* Made some fixes to relative pathing.  On Windows machines if the temporary directory 
+was on a different drive it generated an error.  Relative paths that span drives 
+on Windows are still not available at present.
+* A pixelsize of 1.0 in a DM4 will now not overwrite the Automator GUI value if it 
+has no units.
+* fouCrop = [0,0] will not apply any Fourier cropping (i.e. it will use all the 
+information out to Nyquist)
+* default saveMovie=True (was False). Will save the aligned MRCS movie files until Zorro
+extraction is fully working.  This does waste a lot of hard drive space.
+* Reported pixel errors are now the weighted error rather than unweighted. This should reduce
+the influence of outliers on these metrics. This does not affect registration, just plotting.
+
+
+ZORRO 0.6.2b0
+=======
+
+* Initial beta

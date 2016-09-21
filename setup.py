@@ -17,9 +17,12 @@
 # https://gehrcke.de/2014/02/building-numpy-and-scipy-with-intel-compilers-and-intel-mkl-on-a-64-bit-machine/
 
 # Some samples:
-# https://github.com/pypa/sampleproject/blob/master/setup.py
-# https://github.com/django/django/blob/master/setup.py
-# http://python-packaging-user-guide.readthedocs.org/en/latest/distributing/
+#     https://github.com/pypa/sampleproject/blob/master/setup.py
+#     https://github.com/django/django/blob/master/setup.py
+#     http://python-packaging-user-guide.readthedocs.org/en/latest/distributing/
+#
+#  ManyLinux wheels:
+#     https://www.python.org/dev/peps/pep-0513/
 
 """
  NOTES FOR WINDOWS:
@@ -41,16 +44,23 @@ the environment of a cmd console launched with the following flags (at least for
 cmd /e:on /v:on /k
 then configure the build environment with (FOR PYTHON 2.7):
 
+[Python 2.7]
 set distutils_use_sdk=1
 set mssdk=1
 "c:\program files\microsoft sdks\windows\v7.0\setup\windowssdkver.exe" -q -version:v7.0
 "c:\program files\microsoft sdks\windows\v7.0\bin\setenv.cmd" /x64 /release
-
-finally you can build in the same cmd console:
-
+[activate py27]
 python setup.py install
 
-replace v7.0 by the v7.1 in the above commands to do the same for python 3 instead of python 2.
+[Python 3.4]
+set distutils_use_sdk=1
+set mssdk=1
+"c:\program files\microsoft sdks\windows\v7.0\setup\windowssdkver.exe" -q -version:v7.1
+"c:\program files\microsoft sdks\windows\v7.0\bin\setenv.cmd" /x64 /release
+[activate py34]
+python setup.py install
+
+
 replace /x64 by /x86 to build for 32-bit python instead of 64-bit python.
 
 Ignore the "Missing compiler_cxx fix for MSVCCompiler" error message.
@@ -68,11 +78,17 @@ import time
 
 
 major_ver = 0
-minor_ver = 6
-nano_ver = 2
-branch = 'beta0'
+minor_ver = 7
+nano_ver = 1
+branch = 'b0'
 
-version = "%d.%d.%s.%s" % (major_ver, minor_ver, nano_ver, branch)
+version = "%d.%d.%d%s" % (major_ver, minor_ver, nano_ver, branch)
+
+# Write version.py to Automator and Zorro
+with open( "zorro/__version__.py", 'w' ) as fh:
+    fh.write( "__version__ = '" + version + "'\n" )
+with open( "automator/__version__.py", 'w' ) as fh:
+    fh.write( "__version__ = '" + version + "'\n" )
 
 
 if sys.version_info < (2, 7):
@@ -116,6 +132,7 @@ def configuration(parent_package=None,top_path=None):
     config.add_data_files( (".", 'README.rst') )
     config.add_data_files( (".", "LICENSE.txt") )
     config.add_data_files( (".", "MANIFEST.in") )
+    config.add_data_files( (".", "CHANGELOG.txt") )
     config.add_data_files( (".", "setup.py") )
     config.add_data_files( (".", "cxfreeze_setup.py") )
     config.add_data_files( (".", "requirements.txt") )

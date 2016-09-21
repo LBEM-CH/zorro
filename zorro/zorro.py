@@ -69,10 +69,12 @@ except:
 import matplotlib.pyplot as plt
 
 # Numpy.pad is bad at dealing with interpreted strings
-if sys.version_info > (2,7):
-    symmetric = u'pad'
-    
-
+if sys.version_info >= (3,0):
+    symmetricPad = u'symmetric'
+    constantPad = u'constant'
+else: 
+    symmetricPad = b'symmetric'
+    constantPad = b'constant'
 
 #### OBJECT-ORIENTED INTERFACE ####
 class ImageRegistrator(object):
@@ -99,8 +101,8 @@ class ImageRegistrator(object):
           
         # CALIBRATIONS
         self.pixelsize = None # Typically we use nanometers, the same units as Digital Micrograph
-        self.voltage = None # Accelerating voltage, kV
-        self.C3 = None # Spherical aberration of objective, mm
+        self.voltage = 300.0 # Accelerating voltage, kV
+        self.C3 = 2.7 # Spherical aberration of objective, mm
         self.gain = None
         self.detectorPixelSize = None # Physical dimensions of detector pixel (5 um for K2)
 
@@ -130,7 +132,9 @@ class ImageRegistrator(object):
         self.filterMode = None 
         # Dose filt param = [dosePerFrame, critDoseA, critDoseB, critDoseC, cutoffOrder, missingStartFrame]
         self.doseFiltParam = [None, 0.24499, -1.6649, 2.8141, 32, 0]
-        self.hotpixSigma = 4.0 # for 'hot' in filterMode
+        # for 'hot' in filterMode
+        self.hotpixInfo = { u"logisticK":6.0, u"relax":1.0, u"maxSigma":8.0, u"psf": u"K2",
+                           u"guessHotpix":0, u"guessDeadpix":0 }
         
         
         self.FFTSum = None
@@ -159,12 +163,12 @@ class ImageRegistrator(object):
         # Filtering
         # TODO: add more fine control over filtering options        
         
-        # CTF currently supports CTFFIND3 or GCTF
-        self.CTFProgram = None # None, "ctffind", or "gctf", 'ctffind,sum' works on (aligned) sum, same for 'gctf,sum'
+        # CTF currently supports CTFFIND4.1 or GCTF
+        self.CTFProgram = None # None, "ctffind4.1", or "gctf", 'ctffind4.1,sum' works on (aligned) sum, same for 'gctf,sum'
         self.CTFInfo = { u'DefocusU':None, u'DefocusV': None, u'DefocusAngle':None, u'CtfFigureOfMerit':None,
                          u'FinalResolution': None, u'AmplitudeContrast':0.07, u'AdditionalPhaseShift':None,
                          }
-        self.CTFDiag = None # Diagnostic image from CTFFIND4 or GCTF
+        self.CTFDiag = None # Diagnostic image from CTFFIND4.1 or GCTF
         
         # DEPRICATED ctf stuff
         #self.doCTF = False
@@ -179,7 +183,7 @@ class ImageRegistrator(object):
         # Subpixel alignment method: None (shifts still registered subpixally), lanczos, or fourier
         # lanczos is cheaper computationally and has fewer edge artifacts
         self.shiftMethod = u'lanczos' 
-        self.maxShift = 80 # Generally should be 1/2 distance to next lattice spacing
+        self.maxShift = 100 # Generally should be 1/2 distance to next lattice spacing
         # Pre-shift every image by that of the previous frame, useful for high-resolution where one can jump a lattice
         # i.e. should be used with small values for maxShift
         self.preShift = False
@@ -201,19 +205,20 @@ class ImageRegistrator(object):
         self.diagWidth = 5
         self.autoMax = 10
 
-
-        # corrThres should not be less than 0.0013 for 3710x3838 arrays, as that is the Poisson limit
         self.corrThres = None # Use with 'auto' mode to stop doing cross-correlations if the values drop below the threshold
         
         self.velocityThres = None # Pixel velocity threshold (pix/frame), above which to throw-out frames with too much motion blur.
         
         #### INPUT/OUTPUT ####
-        self.files = { u"config":None, u"stack":None, u"mask":None, u"sum":None, u"align":None, u"figurePath":None,
-                      u"xc":None, u"moveRawPath":None, u"original":None, u"gainRef":None }
+        self.files = { u"config":None, u"stack":None, u"mask":None, u"sum":None, 
+                       u"align":None, u"figurePath":None, u"xc":None, 
+                       u"moveRawPath":None, u"original":None, u"gainRef":None,
+                       u"stdout": None,
+                       u"compressor": None, u"cLevel": 1 }
 
         #self.savePDF = False
         self.savePNG = True
-        self.saveMovie = False
+        self.saveMovie = True
         self.doCompression = False
         
         self.compress_ext = ".bz2"
@@ -224,7 +229,8 @@ class ImageRegistrator(object):
                          u"corrTriMat":False, u"peaksigTriMat": True, 
                          u"translations":True, u"pixRegError":True, 
                          u"CTFDiag":True, u"logisticWeights": True, u"FRC": True, 
-                         u'Transparent': True, u'dpi':144, u'image_cmap':u'gray', u'graph_cmap':u'gnuplot', 
+                         u'Transparent': True, u'plot_dpi':144, u'image_dpi':250,
+                         u'image_cmap':u'gray', u'graph_cmap':u'gnuplot', 
                          u'fontsize':12, u'fontstyle': u'serif', u'colorbar': True,
                          u'backend': u'Qt4Agg', u'multiprocess':True,
                          u'show':False }
@@ -237,9 +243,21 @@ class ImageRegistrator(object):
         stackPath, stackFront = os.path.split( stackName )
         stackFront = os.path.splitext( stackFront )[0]
         
-        self.files[u'align'] = os.path.relpath( os.path.join( u"./align", stackFront + u"_zorro_movie.mrcs" ), start=stackPath )
-        self.files[u'sum'] = os.path.relpath( stackPath, os.path.join( u"./sum", stackFront + u"_zorro.mrc" ), start=stackPath ) 
-        self.files[u'figurePath'] = os.path.relpath( os.path.join(stackPath, u"./figs"), start=stackPath  )
+        if self.files['compressor'] == None:
+            mrcExt = ".mrc"
+            mrcsExt = ".mrcs"
+        else:
+            mrcExt = ".mrcz"
+            mrcsExt = ".mrcsz" 
+            
+        self.files[u'align'] = os.path.relpath( 
+                    os.path.join( u"./align", "%s_zorro_movie%s" %(stackFront, mrcsExt)  ), 
+                    start=stackPath )
+        self.files[u'sum'] = os.path.relpath( stackPath, 
+                    os.path.join( u"./sum", "%s_zorro%s" %(stackFront, mrcExt) ), 
+                    start=stackPath ) 
+        self.files[u'figurePath'] = os.path.relpath( 
+                os.path.join(stackPath, u"./figs"), start=stackPath  )
 
             
     def xcorr2_mc( self, gpu_id = 0, loadResult=True ):
@@ -251,7 +269,7 @@ class ImageRegistrator(object):
         NOTE: Spyder looks loads PATH and LD_LIBRARY_PATH from .profile, not .bashrc
         """
             
-        import re, os
+        
         
         dosef_cmd = util.which("dosefgpu_driftcorr")
         if dosef_cmd is None:
@@ -268,7 +286,7 @@ class ImageRegistrator(object):
         # Unfortunately these files may as well be in the working directory.    
         OutAvName = os.path.join( self.cachePath, stackBase + u"_mcOutAv.mrc" )
         OutStackName = os.path.join( self.cachePath, stackBase + u"_mcOut.mrc" )
-        LogName = os.path.join( self.cachePath, stackBase + u"_mc.zor" )
+        logName = os.path.join( self.cachePath, stackBase + u"_mc.zor" )
         ioMRC.MRCExport( self.images, InName )
 
         # Force binning to 1, as performance with binning is poor
@@ -314,14 +332,33 @@ class ImageRegistrator(object):
                 + " -pbx " + str(maxshift)
                 + " -ssc 1 -fct " + OutStackName 
                 + " -fcs " + OutAvName 
-                + " -flg " + LogName )
+                + " -flg " + logName )
 
         sub = subprocess.Popen( dosef_cmd + motion_flags, shell=True )
         sub.wait()
-        # os.system(dosef_cmd + motion_flags)
+        
+        
+        self.loadMCLog( logName )
+            
+
+        time.sleep(0.5)
+        try: os.remove(InName)
+        except: pass
+        try: os.remove(OutStackName)
+        except: pass
+        try: os.remove(OutAvName)
+        except: pass
+        try: os.remove(logName)
+        except: pass
+        
+    def loadMCLog( self, logName ):
+        """
+        Load and part a MotionCorr log from disk using regular expressions.
+        """
+        import re
         
         # Parse to get the translations
-        fhMC = open( LogName )
+        fhMC = open( logName )
         MClog = fhMC.readlines()
         fhMC.close()
         
@@ -345,25 +382,7 @@ class ImageRegistrator(object):
         if self.originMode == u'centroid':
             centroid = np.mean( self.translations, axis=0 )
             self.translations -= centroid
-
-        
-        if bool(loadResult):
-            print( "Loading MotionCorr aligned frames into ImageRegistrator.images" )
-            self.images = ioMRC.MRCImport( OutStackName )
-            # Calclulate sum
-            self.imageSum = np.sum( self.images, axis=0 )
             
-
-        time.sleep(0.5)
-        try: os.remove(InName)
-        except: pass
-        try: os.remove(OutStackName)
-        except: pass
-        try: os.remove(OutAvName)
-        except: pass
-        try: os.remove(LogName)
-        except: pass
-        
     def xcorr2_unblur( self, dosePerFrame = None, restoreNoise = True, minShift = 2.0, terminationThres = 0.1, 
                       maxIteration=10, verbose=False, loadResult=True   ):
         """
@@ -422,8 +441,8 @@ class ImageRegistrator(object):
         horzFouMaskHW = 1
         
         try: 
-            mrcname = os.path.join( self.cachePath, stackBase + "_unblurIN.mrc" )
-            ioMRC.MRCExport( self.images, mrcname )
+            mrcName = os.path.join( self.cachePath, stackBase + "_unblurIN.mrc" )
+            ioMRC.MRCExport( self.images, mrcName )
         except:
             print( "Error in exporting MRC file to UnBlur" )
             return
@@ -431,7 +450,7 @@ class ImageRegistrator(object):
         # Are there flags for unblur?  Check the source code.
         flags = "" # Not using any flags
          
-        unblurexec = ( unblur_exename + " " + flags + " << STOP_PARSING \n" + mrcname )
+        unblurexec = ( unblur_exename + " " + flags + " << STOP_PARSING \n" + mrcName )
         
         unblurexec = (unblurexec + "\n" + str(self.images.shape[0]) + "\n" +
             outputAvName + "\n" + shiftsOutName + "\n" + str(ps) + "\n" +
@@ -488,7 +507,7 @@ class ImageRegistrator(object):
             self.translations -= centroid
     
         time.sleep(0.5)
-        try: os.remove( mrcname )
+        try: os.remove( mrcName )
         except: print( "Could not remove Unblur MRC input file" )
         try: os.remove( frcOutName )
         except: print( "Could not remove Unblur FRC file" )
@@ -588,9 +607,10 @@ class ImageRegistrator(object):
         self.__shiftsTriMat = np.zeros( [N,N,2], dtype=float_dtype ) # Triagonal matrix of shifts in [I,J,(y,x)]
         self.__corrTriMat = np.zeros( [N,N], dtype=float_dtype ) # Triagonal matrix of maximum correlation coefficient in [I,J]
         self.__peaksigTriMat = np.zeros( [N,N], dtype=float_dtype ) # Triagonal matrix of correlation peak contrast level
+        self.__originTriMat= np.zeros( [N,N], dtype=float_dtype ) # Triagonal matrix of origin correlation coefficient in [I,J]
         
         # Make pyFFTW objects
-        if self.fouCrop is None:
+        if not bool( np.any( self.fouCrop ) ):
             tempFullframe = np.empty( shapeImage, dtype=fftw_dtype )
             self.__FFT2, self.__IFFT2 = util.pyFFTWPlanner( tempFullframe, wisdomFile=os.path.join( self.cachePath, "fftw_wisdom.pkl" ), effort = self.fftw_effort, n_threads=self.n_threads )
             shapeCropped = shapeImage
@@ -676,8 +696,16 @@ class ImageRegistrator(object):
         # Looping for triagonal matrix
         # For auto this is wrong, so make these lists instead
         currIndex = 0
-        if self.saveC: self.C = []
-        
+        self.__originC = []; self.C = []
+        # if bool( self.suppressOrigin ):
+            #self.__debiasShifts = np.zeros( [N, 2], dtype='int' )
+            #self.__debiasShifts[1::4,0] = 10
+            #self.__debiasShifts[3::4,0] = -10
+            #self.__debiasShifts[2::4,1] = 10
+            #elf.__debiasShifts[4::4,1] = -10
+
+
+            
         print( "Pre-computing forward Fourier transforms" )
         # For even-odd and noise estimates, we often skip many rows
         # precompIndices = np.unique( np.vstack( [np.argwhere( np.sum( triIndices, axis=1 ) > 0 ), np.argwhere( np.sum( triIndices, axis=0 ) > 0 ) ] ) )
@@ -695,7 +723,15 @@ class ImageRegistrator(object):
                 masks_block = self.masks[I,:,:]
                 images_block = self.images[I,:,:]
                 
+            #if bool( self.suppressOrigin ):
+                #if np.abs(self.__debiasShifts[I,0]) > 0:
+                    #images_block = np.roll( images_block, self.__debiasShifts[I,0], axis=0 )
+                #elif np.abs(self.__debiasShifts[I,1]) > 0:
+                    #images_block = np.roll( images_block, self.__debiasShifts[I,1], axis=1 )
+                    
             tempReal = nz.evaluate( "masks_block * images_block" ).astype( fftw_dtype )
+
+                    
             self.__FFT2.update_arrays( tempReal, tempFullframe ); self.__FFT2.execute()
             if self.shiftMethod == u"fourier":
                 self.__imageFFT[I,:,:] = tempFullframe.copy(order='C')
@@ -820,14 +856,20 @@ class ImageRegistrator(object):
                         break
                     currIndex += 1
                 pass # C max position location
-        self.bench['xcorr3'] = time.time()
+        
         
 
-        
-        if self.fouCrop is not None:
+        if bool( np.any( self.fouCrop ) ):
             self.__shiftsTriMat[:,:,0] *= self.shapePadded[0] / shapeCropped[0]
             self.__shiftsTriMat[:,:,1] *= self.shapePadded[1] / shapeCropped[1]
         
+        # Remove the debiasing (after fouCrop rescaling)
+        #if bool( self.suppressOrigin ):
+            #for (I,J) in np.argwhere( self.__corrTriMat.astype( 'bool' ) ):
+                #self.__shiftsTriMat[I,J,:] += self.__debiasShifts[I,:]
+                #self.__shiftsTriMat[I,J,:] -= self.__debiasShifts[J,:]
+               
+        self.bench['xcorr3'] = time.time()
         # Pointer reference house-keeping
         del templateMaskFFT, normConst2, tempComplex, tempComplex2 # Pointer
         return
@@ -898,12 +940,12 @@ class ImageRegistrator(object):
         self.__C = nz.evaluate( "(real(tempComplex)*normConst2 - real( Corr_templateMask * Corr_baseMask / maskProduct)) / Denom" )
         
         # print( "%%%% mnxc2.Denom.dtype = " + str(Denom.dtype) )
-
+        self.__originTriMat[I,J] = self.__C[0,0]
         if bool(self.suppressOrigin):
-            # If gain reference is quite old we can still get some cross-artifacts.
-            # TODO: better methodology?  Median filter over a small area?
-            # Fit to the Fourier window?
-            self.__C[0,0] = 0.25 * ( self.__C[1,1] + self.__C[-1,1] + self.__C[-1,1] + self.__C[-1,-1] )
+            # If gain reference is quite old we can still get one bright pixel at the center.
+            # The hot pixel filter has mitigated this but it's still a minor source of bias.
+            self.__C[0,0] = 0.125 * ( self.__C[1,0] + self.__C[0,1] + self.__C[-1,0] + self.__C[-1,0] +
+                self.__C[1,1] + self.__C[-1,1] + self.__C[-1,1] + self.__C[-1,-1] )
             
         # We have everything in normal FFT order until here; Some speed-up could be found by its removal.
         # Pratically we don't have to do this fftshift, but it makes plotting easier to understand
@@ -1015,8 +1057,9 @@ class ImageRegistrator(object):
                 self.__CpadFFT = np.zeros( [self.subPixReg*self.__subR*2,self.subPixReg*self.__subR*2], dtype=fftw_dtype )
                 
                 # NUMPY BUG: mode has to be a byte string
-                self.__CpadFFT.real = np.pad( np.fft.fftshift(self.__CsubFFT.real), ((self.subPixReg-1)*self.__subR,), mode=b'constant', constant_values=(0.0,)  )
-                self.__CpadFFT.imag = np.pad( np.fft.fftshift(self.__CsubFFT.imag), ((self.subPixReg-1)*self.__subR,), mode=b'constant', constant_values=(0.0,)  )
+                
+                self.__CpadFFT.real = np.pad( np.fft.fftshift(self.__CsubFFT.real), ((self.subPixReg-1)*self.__subR,), mode=constantPad, constant_values=(0.0,)  )
+                self.__CpadFFT.imag = np.pad( np.fft.fftshift(self.__CsubFFT.imag), ((self.subPixReg-1)*self.__subR,), mode=constantPad, constant_values=(0.0,)  )
                 self.__CpadFFT = np.fft.ifftshift( self.__CpadFFT )
                 self.__subIFFT2.update_arrays( self.__CpadFFT, self.__Csub_over ); self.__subIFFT2.execute()
                 # Csub_overAbs = nz.evaluate( "abs( Csub_over )") # This is still complex
@@ -1037,12 +1080,14 @@ class ImageRegistrator(object):
                 # scale by (subR*2.0)**2.0
                 self.__corrTriMat[I,J] = Csub_overAbs[ Csub_maxpos[0], Csub_maxpos[1] ] / (self.__subR*2.0)**2.0
             else:
-                print( "Correlation sub-area too close to maxShift!  Subpixel location broken." )
+                print( "Correlation sub-area too close to maxShift!  Subpixel location broken.  Consider increasing maxShift." )
                 self.__shiftsTriMat[I,J,:] = cmaxpos - np.array(self.__C.shape)/2.0
                 self.__corrTriMat[I,J] = self.__C[ cmaxpos[0], cmaxpos[1] ]   
         else: # Do integer pixel registration
             self.__shiftsTriMat[I,J,:] = cmaxpos - np.array(self.__C.shape)/2.0
             self.__corrTriMat[I,J] = self.__C[ cmaxpos[0], cmaxpos[1] ] 
+            
+
             
         del tempComplex, tempComplex2
         try: 
@@ -1065,6 +1110,8 @@ class ImageRegistrator(object):
                 
             Niter is the number of iterations for the 
         """
+        
+
         # Change to allow the autocorrelations to be present, but we never want them in the solver
         shiftsTriMat = shiftsTriMat_in[:-1,1:,:]
         corrTriMat = corrTriMat_in[:-1,1:]
@@ -1080,7 +1127,7 @@ class ImageRegistrator(object):
 
         shapeImage = np.array( [self.images.shape[1], self.images.shape[2]] )
         N = np.asarray( self.images.shape )[0] - 1
-        last_col = np.zeros( N )
+        last_col = np.zeros( N, dtype='int' )
             
         #### BUILD VECTORIZED SHIFTS b_x, b_y AND EQUATION COEFFICIENT MATRIX Acoeff
         M = 0
@@ -1104,7 +1151,8 @@ class ImageRegistrator(object):
         # Now we can ravel triIndices and get the indices from that
         vectorIndices = np.arange(0,triIndices.size)[np.ravel( triIndices )]
         # And this is to go backwards from a vector to an upper-triangular matrix
-        unravelIndices = np.unravel_index( vectorIndices, [N,N] )        
+        unravelIndices = np.unravel_index( vectorIndices, [N,N] )    
+
         b_x = np.ravel( shiftsTriMat[triIndices,1] )
         b_y = np.ravel( shiftsTriMat[triIndices,0] )
         
@@ -1220,15 +1268,19 @@ class ImageRegistrator(object):
         #### ERROR ANALYSIS (for precision of estimated shifts) ####
         acceptedEqnsUnraveled = np.zeros( [N,N] )
         acceptedEqnsUnraveled[unravelIndices[0], unravelIndices[1]] = acceptedEqns
-        acceptedEqnsUnraveled = np.pad( acceptedEqnsUnraveled, ((0,1),(1,0)), mode=b'constant' )
+        acceptedEqnsUnraveled = np.pad( acceptedEqnsUnraveled, ((0,1),(1,0)), mode=constantPad )
         
         # Ok so how big is relativeEst?  Can we add in zeros?
         # Or maybe I should just give weights as weights*acceptedEqnsUnr
         errorXY = np.zeros( [M,2] )
+        
+        ############# Unweighted error ################
+        """
         errorXY[:,1] = np.dot( Acoeff, relativeEst[:,1] ) - b_x
         errorXY[:,0] = np.dot( Acoeff, relativeEst[:,0] ) - b_y
+        
         errorNorm = np.sqrt( errorXY[:,0]*errorXY[:,0] + errorXY[:,1]*errorXY[:,1] )
-
+ 
         mean_errorNorm = np.mean( errorNorm[acceptedEqns] )
         std_errorNorm = np.std( errorNorm[acceptedEqns] )
     
@@ -1240,9 +1292,9 @@ class ImageRegistrator(object):
         errorXun[unravelIndices[0], unravelIndices[1]] = np.abs( errorXY[:,1] )
         errorYun[unravelIndices[0], unravelIndices[1]] = np.abs( errorXY[:,0] )
         
-        errorXun = np.pad( errorXun, ((0,1),(1,0)), mode=b'constant' )
-        errorYun = np.pad( errorYun, ((0,1),(1,0)), mode=b'constant' )
-        triPadded = np.pad( triIndices, ((0,1),(1,0)), mode=b'constant' )
+        errorXun = np.pad( errorXun, ((0,1),(1,0)), mode=constantPad )
+        errorYun = np.pad( errorYun, ((0,1),(1,0)), mode=constantPad )
+        triPadded = np.pad( triIndices, ((0,1),(1,0)), mode=constantPad )
         
         # Mask out un-used equations from error numbers
         errorYun = errorYun * acceptedEqnsUnraveled
@@ -1263,7 +1315,73 @@ class ImageRegistrator(object):
                 errorY[J] = ( np.sum( errorYun[J,:]) + np.sum(errorYun[:,J-1]) ) / ( np.sum( triPadded[J,:]) + np.sum(triPadded[:,J-1]) )
             except:
                 pass
+        """
 
+        ################## Weighted error ######################
+        # Make any zero weight just very small
+        weights = np.clip( weights, 1E-6, np.Inf )
+        
+        errorXY[:,1] = np.dot( Acoeff, relativeEst[:,1] ) - b_x
+        errorXY[:,0] = np.dot( Acoeff, relativeEst[:,0] ) - b_y
+        
+        errorNorm = np.sqrt( errorXY[:,0]*errorXY[:,0] + errorXY[:,1]*errorXY[:,1] )
+
+        acceptedErrorNorm = errorNorm[acceptedEqns]
+        
+        mean_errorNorm = np.sum( weights * acceptedErrorNorm ) / np.sum(weights)
+        mean_unweighted = np.mean( errorNorm[acceptedEqns] )
+        
+        print( "RMS: " + str(np.sum( weights * acceptedErrorNorm**2 )) )
+        print( "Normed RMS: " + str(np.sum( weights * acceptedErrorNorm**2 ) / np.sum(weights)))
+        print( "mean_errorNorm**2 + " + str(  mean_errorNorm**2 ))
+        std_errorNorm = np.sqrt( np.sum( weights * acceptedErrorNorm**2 ) 
+                / np.sum(weights) - mean_errorNorm**2 )
+        # np.sqrt( np.sum( unalignedHist * unalignedCounts**2 )/ sumFromHist - meanFromHist*meanFromHist  )
+
+        std_unweighted = np.std( acceptedErrorNorm )
+        print( "sum(acceptedErrorNorm): %f" % np.sum(acceptedErrorNorm) )
+        print( "MEAN ERROR (weighted: %f | unweighted: %f )" % (mean_errorNorm, mean_unweighted)  )
+        print( "STD ERROR (weighted: %f | unweighted: %f )" % (std_errorNorm, std_unweighted)  )
+        
+        # Error unraveled (i.e. back to the upper triangular matrix form)
+        errorUnraveled = np.zeros( [N,N] )
+        errorXun = np.zeros( [N,N] )
+        errorYun = np.zeros( [N,N] )
+        weightsUn = np.zeros( [N,N] )
+        errorUnraveled[unravelIndices[0], unravelIndices[1]] = errorNorm
+        weightsUn[unravelIndices[0], unravelIndices[1]] = weights
+        errorXun[unravelIndices[0], unravelIndices[1]] = np.abs( errorXY[:,1] )
+        errorYun[unravelIndices[0], unravelIndices[1]] = np.abs( errorXY[:,0] )
+        
+        errorXun = np.pad( errorXun, ((0,1),(1,0)), mode=constantPad )
+        errorYun = np.pad( errorYun, ((0,1),(1,0)), mode=constantPad )
+        triPadded = np.pad( triIndices, ((0,1),(1,0)), mode=constantPad )
+        weightsUn = np.pad( weightsUn, ((0,1),(1,0)), mode=constantPad )
+        
+        # DEBUG: weighted error trimats
+        # plot.ims( (errorXun, weightsUn, errorYun, acceptedEqnsUnraveled), titles=( "errorXun","weightsUn","errorYun", "AcceptedUnraveled") )
+        
+        # Mask out un-used equations from error numbers
+        errorYun = errorYun * acceptedEqnsUnraveled
+        errorXun = errorXun * acceptedEqnsUnraveled
+        triPadded = triPadded * acceptedEqnsUnraveled    
+
+        # errorX and Y are per-frame error estimates
+        errorX = np.zeros( N+1 )
+        errorY = np.zeros( N+1 )
+        # Sum horizontally and vertically, keeping in mind diagonal is actually at x-1
+        for J in np.arange(0,N+1):
+            try:
+                errorX[J] = ( ( np.sum( errorXun[J,:]*weightsUn[J,:]) + np.sum(errorXun[:,J-1]*weightsUn[:,J-1]) ) / 
+                        ( np.sum( weightsUn[J,:]) + np.sum(weightsUn[:,J-1]) ) )
+            except:
+                print( "Warning: per-frame error estimation failed, possibly due to zero-weight in solution solver" )
+            try:
+                errorY[J] = ( ( np.sum( errorYun[J,:]*weightsUn[J,:]) + np.sum(errorYun[:,J-1]*weightsUn[:,J-1]) ) / 
+                        ( np.sum( weightsUn[J,:]) + np.sum(weightsUn[:,J-1]) ) )
+            except:
+                print( "Warning: per-frame error estimation failed, possibly due to zero-weight in solution solver" )
+        #### END WEIGHTED ERROR ############
         
         # translations (to apply) are the negative of the found shifts
         errorDict[u'translations'] = -np.vstack( (np.zeros([1,2]), np.cumsum( relativeEst, axis=0 ) ) )
@@ -1271,6 +1389,7 @@ class ImageRegistrator(object):
         errorDict[u'acceptedEqns'] = acceptedEqns
         # Not necessary to save triIndices, it's the non-zero elements of corrTriMat
         # errorDict['triIndices'] = triIndices
+        errorDict[u'weights'] = weights
         errorDict[u'errorXY'] = errorXY
         errorDict[u'shiftsTriMat'] = shiftsTriMat_in
         errorDict[u'errorX'] = errorX 
@@ -1301,7 +1420,6 @@ class ImageRegistrator(object):
             nz.set_num_threads( self.n_threads )
         print( "Numexprz using %d threads and float dtype: %s" % (nz.nthreads, float_dtype) )
 
-
         if self.filterMode != None and 'hot' in self.filterMode.lower():
             self.hotpixFilter()
             
@@ -1310,12 +1428,14 @@ class ImageRegistrator(object):
         if np.any( self.shapeBinned ):
             self.binStack()
             
-        # Do CTF measurement first, CTFFIND4 crashes a lot, so we save processing if it can't fit the CTF
+        # Do CTF measurement first, so we save processing if it can't fit the CTF
         # Alternatively if CTFProgram == 'ctffind,sum' this is performed after alignment. 
         if bool(self.CTFProgram): 
             splitCTF = self.CTFProgram.lower().replace(' ','').split(',')
-            if len(splitCTF) == 1 and ( splitCTF[0] == u'ctffind' or splitCTF[0] == u'ctffind4'):
-                self.execCTFFind4( movieMode=True )
+            if len(splitCTF) == 1 and ( splitCTF[0] == u'ctffind' or splitCTF[0] == u'ctffind4.1'):
+                self.execCTFFind41( movieMode=True )
+            elif len(splitCTF) == 1 and ( splitCTF[0] == u'ctffind4' ):
+                self.execCTFFind4( movieMode=True )    
             elif len(splitCTF) == 1 and (splitCTF[0] == u'gctf'): # Requires CUDA and GPU
                 self.execGCTF( movieMode=True )
             
@@ -1340,12 +1460,14 @@ class ImageRegistrator(object):
             self.errorDictList.append({})
             self.errorDictList[-1][u'shiftsTriMat'] = self.__shiftsTriMat
             self.errorDictList[-1][u'corrTriMat'] = self.__corrTriMat
+            self.errorDictList[-1][u'originTriMat'] = self.__originTriMat
             self.errorDictList[-1][u'peaksigTriMat'] = self.__peaksigTriMat
             self.errorDictList[-1][u'translations'] = self.translations.copy()
         elif self.triMode == u'refine':
             self.errorDictList.append({})
             self.errorDictList[-1][u'shiftsTriMat'] = self.__shiftsTriMat
             self.errorDictList[-1][u'corrTriMat'] = self.__corrTriMat
+            self.errorDictList[-1][u'originTriMat'] = self.__originTriMat
             self.errorDictList[-1][u'peaksigTriMat'] = self.__peaksigTriMat
             
             m = self.images.shape[0]
@@ -1358,6 +1480,7 @@ class ImageRegistrator(object):
         else:
             # Every round of shiftsSolver makes an error dictionary
             self.shiftsSolver( self.__shiftsTriMat, self.__corrTriMat, self.__peaksigTriMat )
+            self.errorDictList[-1][u'originTriMat'] = self.__originTriMat
             self.translations = self.errorDictList[-1][u'translations'].copy( order='C' )
         self.bench['solve1'] = time.time()
         
@@ -1370,7 +1493,9 @@ class ImageRegistrator(object):
         
         # Calculate CTF on aligned sum if requested
         if bool(self.CTFProgram) and len(splitCTF) >= 2 and splitCTF[1]== u'sum':
-            if splitCTF[0] == u'ctffind' or splitCTF[0] == u'ctffind4':
+            if splitCTF[0] == u'ctffind' or splitCTF[0] == u'ctffind4.1':
+                self.execCTFFind41( movieMode=False )
+            elif splitCTF[0] == u'ctffind4':
                 self.execCTFFind4( movieMode=False )
             elif splitCTF[0] == u'gctf': # Requires CUDA
                 self.execGCTF( movieMode=False )
@@ -1411,14 +1536,13 @@ class ImageRegistrator(object):
                 self.bench['dose1'] = time.time()
                 
         self.cleanPrivateVariables()
-        self.bench['total1'] = time.time() 
         pass # End of alignImageStack
         
     def cleanPrivateVariables(self):
         """
         Remove all private ("__") variables so the memory they occupy is released.
         """
-        print( "TODO: finish cleanPrivateVariables" )
+        # TODO: go through the code and see if there's anything large leftover.
         try: del self.__FFT2, self.__IFFT2
         except: pass
         try:  del self.__subFFT2, self.__subIFFT2
@@ -1582,7 +1706,6 @@ class ImageRegistrator(object):
             ImageBinned = np.zeros( self.shapeBinned, dtype=fftw_dtype )
             normConst = 1.0 / (self.shapeBinned[0]*self.shapeBinned[1])
             for J in np.arange( self.images.shape[0] ):
-                # print( "%d, mean: %.2f" %(J, np.mean(dm4Image[J,:,:] ) ) )
                 FFT2.update_arrays( self.images[J,:,:].astype( fftw_dtype ), FFTImage ); FFT2.execute()
                 # Crop
                 FFTBinned[:bShape2[0],:bShape2[1]] = FFTImage[:bShape2[0],:bShape2[1]]
@@ -1598,7 +1721,6 @@ class ImageRegistrator(object):
                 
                 # De-complexify
                 binArray[J,:,:] = np.real( ImageBinned )
-                #print( "%d, binned mean: %.2f" %(J, np.mean(binArray[J,:,:] ) ) )
                 pass
             
         pass
@@ -1609,7 +1731,7 @@ class ImageRegistrator(object):
 
 
         
-    def padStack( self, padSize=None ):
+    def padStack( self, padSize=None, interiorPad=12 ):
         """
         This function is used to zero-pad both the images and masks.  This breaks
         the circular shift issues.
@@ -1635,7 +1757,6 @@ class ImageRegistrator(object):
             print( "Cannot pad to: " + str(padSize) )
             return
         
-            
         m = self.images.shape[0]
         self.shapeOriginal = [ self.images.shape[1], self.images.shape[2] ]
         self.shapePadded = padSize # This needs to be recorded for undoing the padding operation
@@ -1647,7 +1768,8 @@ class ImageRegistrator(object):
         # Then make or pad the mask appropriately.
         if self.masks is None:
             self.masks = np.zeros( [1,padSize[0],padSize[1]], dtype='bool', order='C' )
-            self.masks[0,:self.shapeOriginal[0],:self.shapeOriginal[1]] = 1.0
+            self.masks[0, interiorPad:self.shapeOriginal[0]-interiorPad,
+                       interiorPad:self.shapeOriginal[1]-interiorPad] = 1.0
         else:
             if self.masks.shape[1] != self.shapePadded[0] and self.masks.shape[2] != self.shapePadded[1]:
                 mmask = self.masks.shape[0]
@@ -1901,8 +2023,15 @@ class ImageRegistrator(object):
         
         # DEBUG: Save the aligned eoReg images for subZorro use
         stackFront = os.path.splitext( self.files[u'sum'] )[0]
-        ioMRC.MRCExport( evenReg.imageSum, stackFront + u"_even.mrc" )
-        ioMRC.MRCExport( oddReg.imageSum, stackFront + u"_odd.mrc" )
+        if self.files['compressor'] == None:
+            mrcExt = ".mrc"
+        else:
+            mrcExt = ".mrcz"
+            
+        ioMRC.MRCExport( evenReg.imageSum, u"%s_even%s" % (stackFront, mrcExt ),
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads)
+        ioMRC.MRCExport( oddReg.imageSum, u"%s_odd%s" % (stackFront, mrcExt ),
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
         
         eoReg.tiledFRC( eoReg.images[0,:,:], eoReg.images[1,:,:], 
                        trans=np.hstack( [self.transEven, self.transOdd] ), box=box, overlap=overlap )
@@ -2072,6 +2201,8 @@ class ImageRegistrator(object):
         cutoffOrder = self.doseFiltParam[4]
         
         if not bool( self.voltage ):
+            self.METAstatus = u"error"
+            self.saveConfig()
             raise ValueError( "Accelerating voltage not set in advance for dose filtering" )
         voltageScaling = np.float32( np.sqrt( self.voltage / 300.0  ) ) # increase in radiolysis at lower values.
         
@@ -2112,7 +2243,7 @@ class ImageRegistrator(object):
 
         # We probably don't need an entire mesh here...
         qvect = np.arange(0,self.shapePadded[0]/2) * np.sqrt( invPSx*invPSy )
-        optiDoseVect = np.zeros( (self.shapePadded[0]/2).astype('int') )
+        optiDoseVect = np.zeros( int(self.shapePadded[0]/2) )
         optiDoseVect[1:] = 2.51284*voltageScaling*(critDoseA * qvect[1:]**critDoseB + critDoseC)
         optiDoseVect[0] = optiDoseVect[1]**2
         
@@ -2142,7 +2273,7 @@ class ImageRegistrator(object):
             
             # Numpy's pad is also quite slow
             paddedImage = np.pad( self.images[J,:,:].astype(fftw_dtype),
-                                     ((0,padWidth[0]),(0,padWidth[1])), mode=b'symmetric'   )
+                                     ((0,padWidth[0]),(0,padWidth[1])), mode=symmetricPad   )
                                      
             FFT2.update_arrays( paddedImage, FFTimage ); FFT2.execute()
             # Adding Fourier complex magntiude works fine
@@ -2168,7 +2299,104 @@ class ImageRegistrator(object):
         del invPSx, invPSy, qmesh, optiDoseVect, doseFinish, doseStart, critDoseA, critDoseB, critDoseC, 
         del voltageScaling, filt, thres, thresQ, cutoffOrder
         
-    def hotpixFilter( self, gaussFilterSigma=4.0 ):
+    def hotpixFilter( self  ):
+        """
+        Identifies and removes hot pixels using a stocastic weighted approach.
+        replaced with a Gaussian filter.  Hot pixels do not affect Zorro too much 
+        due to the intensity-normalized cross-correlation but the tracks of the 
+        hot pixels do upset other software packages.
+        
+        PSF is used to provide a camera-specific PSF to filter hot pixels.  If 
+        you have an MTF curve for a detector we can provide a psf tailored to that
+        particular device, otherwise use None for a uniform filter.
+        """
+        self.bench['hot0'] = time.time()
+        
+        if self.hotpixInfo[u"psf"] == u"K2":
+            psf = np.array( [0.0, 0.173235968, 0.016518], dtype='float32' )
+        else: # default to uniform filter
+            psf = np.array( [0.0, 1.0, 1.0], dtype='float32' )
+        
+        psfKernel = np.array( [  [psf[2]*psf[2], psf[2]*psf[1], psf[2], psf[2]*psf[1], psf[2]*psf[2] ],
+               [psf[2]*psf[1], psf[1]*psf[1], psf[1], psf[1]*psf[1], psf[1]*psf[2] ],
+               [psf[2], psf[1], 0.0, psf[1], psf[2] ],
+               [psf[2]*psf[1], psf[1]*psf[1], psf[1], psf[1]*psf[1], psf[1]*psf[2] ],
+               [ psf[2]*psf[2], psf[2]*psf[1], psf[2], psf[2]*psf[1], psf[2]*psf[2] ] ]  )
+        psfKernel /= np.sum( psfKernel )
+        
+        unalignedSum = np.sum( self.images, axis=0 )
+        muDiff = np.mean( unalignedSum )
+        sigmaDiff = np.std( unalignedSum )
+        histBins = np.arange( np.floor(muDiff- self.hotpixInfo[u"maxSigma"]*sigmaDiff)-0.5, np.ceil(muDiff+self.hotpixInfo[u"maxSigma"]*sigmaDiff)+0.5, 1 )
+        unalignedHist, unalignedCounts = np.histogram( unalignedSum, histBins )
+        unalignedHist = unalignedHist.astype('float32'); unalignedCounts=unalignedCounts[:-1].astype('float32')
+        # TODO: might be a 0.5 count bias in the histogram, since we want to 
+        # convert from edges to centers.
+        
+        # Here we get sigma values from the CDF, which is smoother than the PDF due 
+        # to the integration applied.
+        cdfHist = np.cumsum( unalignedHist )
+        cdfHist /= cdfHist[-1]
+        sigmaFromCDF = np.sqrt(2) * scipy.special.erfinv( 2.0 * cdfHist - 1 ) 
+        
+        sumFromHist = np.sum( unalignedHist )
+        meanFromHist = np.float32( np.sum( unalignedHist * unalignedCounts ) / sumFromHist )
+        stdFromHist = np.float32( np.sqrt( np.sum( unalignedHist * unalignedCounts**2 )/ sumFromHist - meanFromHist*meanFromHist  ) )
+        invStdFromHist = np.float32(1.0 / stdFromHist )
+        
+        normalSigma = (unalignedCounts - meanFromHist) * invStdFromHist # DO we need this?
+        
+        # TODO: try to keep these infs from being generated in the first place
+        errorNormToCDF = normalSigma - sigmaFromCDF
+        keepIndices = ~np.isinf( errorNormToCDF )
+        errorNormToCDF = errorNormToCDF[keepIndices]
+        # unalignedCountsKeep = unalignedCounts[keepIndices]
+        normalSigmaKeep = normalSigma[keepIndices]
+    
+        lowerIndex = np.where( errorNormToCDF > -0.5 )[0][0]
+        upperIndex = np.where( errorNormToCDF < 0.5 )[0][-1]
+    
+        # TODO: add try-except, using a fixed error difference if the fitting fails
+        try:
+            lowerA = np.array( [normalSigmaKeep[:lowerIndex], np.ones(lowerIndex )] )
+            
+            lowerFit = np.linalg.lstsq( lowerA.T, errorNormToCDF[:lowerIndex] )[0]
+            cutoffLower = np.float32( -lowerFit[1]/lowerFit[0] )
+        except:
+            print( "zorro.hotpixFilter failed to estimate bound for dead pixels, defaulting to -4.0" )
+            cutoffLower = np.float32( -4.0 )
+    
+        try:
+            upperA = np.array( [normalSigmaKeep[upperIndex:], np.ones( len(normalSigmaKeep) - upperIndex )] )
+            upperFit = np.linalg.lstsq( upperA.T, errorNormToCDF[upperIndex:] )[0]
+            cutoffUpper = np.float32( -upperFit[1]/upperFit[0] )
+        except:
+            print( "zorro.hotpixFilter failed to estimate bound for hot pixels, defaulting to +3.25" )
+            cutoffLower = np.float32( 3.25 )
+            
+        unalignedSigma = (unalignedSum - meanFromHist) * invStdFromHist
+
+        print( "Applying progressive outlier pixel filter with sigma limits (%.2f,%.2f)" % (cutoffLower, cutoffUpper) )
+        # JSON isn't serializing numpy types anymore, so we have to explicitely cast them
+        self.hotpixInfo[u'cutoffLower'] = float( cutoffLower )
+        self.hotpixInfo[u'cutoffUpper'] = float( cutoffUpper )
+        self.hotpixInfo[u"guessDeadpix"] = int( np.sum( unalignedSigma < cutoffLower ) )
+        self.hotpixInfo[u"guessHotpix"] = int( np.sum( unalignedSigma > cutoffUpper  ) )
+        
+        logK = np.float32( self.hotpixInfo[u'logisticK'] )
+        relax = np.float32( self.hotpixInfo[u'relax'] )
+        logisticMask = nz.evaluate( "1.0 - 1.0 / ( (1.0 + exp(logK*(unalignedSigma-cutoffLower*relax)) ) )" )
+        logisticMask = nz.evaluate( "logisticMask / ( (1.0 + exp(logK*(unalignedSigma-cutoffUpper*relax)) ) )" ).astype('float32')
+        convLogMask = np.float32(1.0) - logisticMask # For some reason numexpr is taking the 1.0 to be float64
+        psfFiltMean = scipy.ndimage.convolve( unalignedSum/self.images.shape[0], psfKernel ).astype('float32')
+        
+        stack = self.images
+        self.images = nz.evaluate( "convLogMask * psfFiltMean + logisticMask*stack" )
+        self.bench['hot1'] = time.time()
+        del logK, relax, logisticMask, psfFiltMean, stack, convLogMask
+
+        
+    def hotpixFilterOLD( self, hotpixSigma=3.5, gaussFilterSigma=4.0 ):
         """
         Identifies and removes hot pixels using a confidence interval approach. 
         Hot pixels exceeding self.hotpixSigma*np.std() are clipped and then
@@ -2186,12 +2414,12 @@ class ImageRegistrator(object):
             muUnaligned = np.mean( unalignedSum )
             sigmaUnaligned = np.std( unalignedSum )
             
-            hotpixMask = np.abs(unalignedSum - muUnaligned) > self.hotpixSigma*sigmaUnaligned
+            hotpixMask = np.abs(unalignedSum - muUnaligned) > hotpixSigma*sigmaUnaligned
             
             # Clip before applying the filter to better limit multiple pixel hot spots
             unalignedSum = np.clip( unalignedSum, 
-                                 muUnaligned - self.hotpixSigma*sigmaUnaligned, 
-                                 muUnaligned + self.hotpixSigma*sigmaUnaligned )
+                                 muUnaligned - hotpixSigma*sigmaUnaligned, 
+                                 muUnaligned + hotpixSigma*sigmaUnaligned )
         
             # Let's stick to a gaussian_filter, it's much faster than a median filter and seems equivalent if we pre-clip
             # unalignedFilt = scipy.ndimage.median_filter( boxMat[J,:,:], [5,5] )
@@ -2199,6 +2427,7 @@ class ImageRegistrator(object):
             # Probably this is the slow step right here...
             self.images = self.images * (~ hotpixMask) + unalignedFilt * hotpixMask         
             self.bench['hot1'] = time.time()
+
 
 
     def setBfiltCutoff( self, cutoffSpacing ):
@@ -2294,44 +2523,46 @@ class ImageRegistrator(object):
             
         stackBase = os.path.splitext( os.path.basename( self.files[u'stack'] ) )[0]
         
-        MRCname = os.path.join( self.cachePath, stackBase + u"_gctf.mrc" )
-        diagOutName = os.path.join( self.cachePath, stackBase + u".ctf" )
-        logName = os.path.join( self.cachePath, stackBase + u"_ctffind3.log" )
+        mrcName = os.path.join( self.cachePath, stackBase + u"_gctf.mrc" )
+        mrcFront = os.path.splitext( mrcName )[0]
+        diagOutName = mrcFront + u".ctf"
+        logName = mrcFront + u"_ctffind3.log"
+        epaName = mrcFront + u"_EPA.log"
         
         if bool( movieMode ):
             # Write an MRCS
-            ioMRC.MRCExport( self.images, MRCname )
+            ioMRC.MRCExport( self.images, mrcName )
             # Call GCTF
 
-            gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --mdef_ave_type 1 --logsuffix  _ctffind3.log " % (MRCname, self.pixelsize*10, self.voltage, self.C3 )
+            gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --mdef_ave_type 1 --logsuffix  _ctffind3.log " % (mrcName, self.pixelsize*10, self.voltage, self.C3 )
             gctf_exec += " --mdef_aveN %d --mdef_fit %d --mdef_ave_type %d" %( movieFrameToAverage, movieFit, movieType )
         else: # No movieMode
             if not np.any( self.imageSum ):
                 raise AttributeError( "Error in execGCTF: No image sum found" )
-            ioMRC.MRCExport( self.imageSum, MRCname )
+            ioMRC.MRCExport( self.imageSum, mrcName )
             # Call GCTF
-            gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --logsuffix  _ctffind3.log " % (MRCname, self.pixelsize*10, self.voltage, self.C3 )
+            gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --logsuffix  _ctffind3.log " % (mrcName, self.pixelsize*10, self.voltage, self.C3 )
 
         # Need to redirect GCTF output to null because it's formatted with UTF-16 and this causes Python 2.7 problems.
         devnull = open(os.devnull, 'w' )
-        sub = subprocess.Popen( gctf_exec, shell=True, stdout=devnull, stderr=devnull )
+        subprocess.call( gctf_exec, shell=True, stdout=devnull, stderr=devnull )
         # sub = subprocess.Popen( gctf_exec, shell=True )
-        sub.wait() 
+        #sub.wait() 
 
         # Diagnostic image ends in .ctf
-        self.CTFDiag = ioMRC.MRCImport( os.path.splitext( MRCname )[0] + u".ctf" )
+        self.CTFDiag = ioMRC.MRCImport( diagOutName )
 
         # Parse the output _ctffind3.log for the results
-        with open( os.path.splitext( MRCname)[0] + u"_ctffind3.log", 'r' ) as fh:
+        with open( logName, 'r' ) as fh:
             logCTF = fh.readlines()
 
         ctf = logCTF[-5].split()
-        self.CTFInfo[u'DefocusU'] = np.float32( ctf[0] )
-        self.CTFInfo[u'DefocusV'] = np.float32( ctf[1] )
-        self.CTFInfo[u'DefocusAngle'] = np.float32( ctf[2] )
-        self.CTFInfo[u'CtfFigureOfMerit'] = np.float32( ctf[3] )
-        self.CTFInfo[u'FinalResolution'] = np.float32( logCTF[-3].split()[-1] )
-        self.CTFInfo[u'Bfactor'] = np.float32( logCTF[-2].split()[-1] )
+        self.CTFInfo[u'DefocusU'] = float( ctf[0] )
+        self.CTFInfo[u'DefocusV'] = float( ctf[1] )
+        self.CTFInfo[u'DefocusAngle'] = float( ctf[2] )
+        self.CTFInfo[u'CtfFigureOfMerit'] = float( ctf[3] )
+        self.CTFInfo[u'FinalResolution'] = float( logCTF[-3].split()[-1] )
+        self.CTFInfo[u'Bfactor'] = float( logCTF[-2].split()[-1] )
 
         # Output compact _ctffind3.log
         self.saveRelionCTF3( )
@@ -2341,10 +2572,134 @@ class ImageRegistrator(object):
         except: pass
         try: os.remove( logName ) # Technically we could keep this.
         except: pass
-        try: os.remove( MRCname )
+        try: os.remove( mrcName )
+        except: pass
+        try: os.remove( epaName )
         except: pass
         self.bench['ctf1'] = time.time()
-                                     
+     
+    def execCTFFind41( self, movieMode=False, box_size = 1024, contrast=0.067, 
+                     min_res=50.0, max_res=4.0, 
+                     min_C1=5000.0, max_C1=45000.0, C1_step = 500.0, 
+                     A1_tol = 500.0 ):
+        """
+        Calls CTFFind4, must be on the system path.
+             movieMode = True does not require an aligned image (works on Fourier magnitudes)
+             box_size = CTFFind parameter, box size to FFT
+             contrast = estimated phase contrast in images
+             min_res = minimum resolution to fit, in Angstroms
+             max_res = maximum resolution to fit, in Angstroms.  Water ice is around 3.4 Angstroms
+             min_C1 = minimum defocus search range, in Angstroms
+             max_C1 = maximum defocus search range, in Angstroms
+             C1_step = defocus search step size, in Angstroms
+             A1_tol = 2-fold astigmatism tolerance, in Angstroms
+        """
+        self.bench['ctf0'] = time.time()
+        if util.which( 'ctffind' ) is None:
+            print( "Error: CTFFIND not found!" )
+            return
+        if self.pixelsize is None:
+            print( "Set pixelsize (in nm) before calling execCTFFind4" )
+            return
+        elif self.voltage is None:
+            print( "Set voltage (in kV) before calling execCTFFind4" )
+            return
+        elif self.C3 is None:
+            print( "Set C3 (in mm) before calling execCTFFind4" )
+            return
+        
+        print( "Calling CTFFIND4.1 for %s" % self.files['stack']  )
+        print( "   written by Alexis Rohou: http://grigoriefflab.janelia.org/ctffind4" )
+        print( "   http://biorxiv.org/content/early/2015/06/16/020917" )
+        
+        ps = self.pixelsize * 10.0
+        min_res = np.min( [min_res, 50.0] )
+        
+        try: os.umask( self.umask ) # Why is Python not using default umask from OS?
+        except: pass
+        
+        if self.cachePath is None:
+            self.cachePath = "."
+            
+        # Force trailing slashes onto cachePatch
+        stackBase = os.path.splitext( os.path.basename( self.files[u'stack'] ) )[0]
+            
+        diagOutName = os.path.join( self.cachePath, stackBase + u".ctf" )
+         
+        try: 
+            mrcName = os.path.join( self.cachePath, stackBase + u"_ctf4.mrc" )
+            if bool(movieMode):
+                ioMRC.MRCExport( self.images, mrcName )
+                number_of_frames_to_average = 1
+            else:
+                ioMRC.MRCExport( self.imageSum, mrcName )
+        except:
+            print( "Error in exporting MRC file to CTFFind4.1" )
+            return
+         
+        # flags = "--amplitude-spectrum-input --filtered-amplitude-spectrum-input"
+        flags = "" # Not using any flags
+        find_additional_phase_shift = "no"
+        knownAstig = "no"
+        largeAstig = "no"
+        restrainAstig = "yes"
+        expertOptions = "no"
+        
+        ctfexec = ( "ctffind " + flags + " << STOP_PARSING \n" + mrcName + "\n" )
+        if bool(movieMode):
+             ctfexec = ctfexec + "yes\n" + str(number_of_frames_to_average + "\n" )
+         
+        ctfexec = (ctfexec + diagOutName + "\n" + str(ps) + "\n" + str(self.voltage) + "\n" +
+            str(self.C3) + "\n" + str(contrast) + "\n" + str(box_size) + "\n" +
+            str(min_res) + "\n" + str(max_res) + "\n" + str(min_C1) + "\n" + 
+            str(max_C1) + "\n" + str(C1_step) + "\n" + str(knownAstig) + "\n" + 
+            str(largeAstig) + "\n" + str(restrainAstig) + "\n" +
+            str(A1_tol) + "\n" + find_additional_phase_shift + "\n" +
+            str(expertOptions) )    
+        ctfexec = ctfexec + "\nSTOP_PARSING"
+
+        subprocess.call( ctfexec, shell=True )
+
+        
+        try:
+            logName = os.path.join( self.cachePath, stackBase + ".txt" )
+            print( "Trying to load from: " + logName )
+            # Log has 5 comment lines, then 1 header, and
+            # Micrograph number, DF1, DF2, Azimuth, Additional Phase shift, CC, and max spacing fit-to
+            CTF4Results = np.loadtxt(logName, comments='#', skiprows=1 )
+            self.CTFInfo[u'DefocusU'] = float( CTF4Results[1] )
+            self.CTFInfo[u'DefocusV'] = float( CTF4Results[2] )
+            self.CTFInfo[u'DefocusAngle'] = float( CTF4Results[3] )
+            self.CTFInfo[u'AdditionalPhaseShift'] = float( CTF4Results[4] )
+            self.CTFInfo[u'CtfFigureOfMerit'] = float( CTF4Results[5] )
+            self.CTFInfo[u'FinalResolution'] = float( CTF4Results[6] )
+            
+            self.CTFDiag = ioMRC.MRCImport( diagOutName )
+            
+        except:
+            print( "CTFFIND4 likely core-dumped, try different input parameters?" )
+        pass
+        # Write a RELION-style _ctffind3.log file, with 5 um pixel size...
+        self.saveRelionCTF3()
+            
+        # TODO: having trouble with files not being deletable, here.  Is CTFFIND4 holding them open?  Should 
+        # I just pause for a short time?
+        time.sleep(0.5) # DEBUG: try and see if temporary files are deletable now.
+        try: os.remove( mrcName )
+        except IOError: 
+            print( "Could not remove temporary file: " + str(IOError) )
+        try: os.remove( diagOutName )
+        except IOError: 
+            print( "Could not remove temporary file: " + str(IOError) )
+        # Delete CTF4 logs
+        try: os.remove( os.path.join( self.cachePath, stackBase + "_avrot.txt") )
+        except: pass
+        try: os.remove( logName )
+        except: pass
+        try: os.remove( os.path.join( self.cachePath, stackBase + ".ctf" ) )
+        except: pass
+        self.bench['ctf1'] = time.time()
+                                
     def execCTFFind4( self, movieMode=False, box_size = 512, contrast=0.067, 
                      min_res=50.0, max_res=4.0, 
                      min_C1=5000.0, max_C1=45000.0, C1_step = 500.0, 
@@ -2395,14 +2750,14 @@ class ImageRegistrator(object):
         diagOutName = os.path.join( self.cachePath, stackBase + u".ctf" )
          
         try: 
-            mrcname = os.path.join( self.cachePath, stackBase + u"_ctf4.mrc" )
+            mrcName = os.path.join( self.cachePath, stackBase + u"_ctf4.mrc" )
             if movieMode:
                 input_is_a_movie = 'true'
-                ioMRC.MRCExport( self.images, mrcname )
+                ioMRC.MRCExport( self.images, mrcName )
                 number_of_frames_to_average = 1
             else:
                 input_is_a_movie = 'false'
-                ioMRC.MRCExport( self.imageSum, mrcname )
+                ioMRC.MRCExport( self.imageSum, mrcName )
         except:
             print( "Error in exporting MRC file to CTFFind4" )
             return
@@ -2411,7 +2766,7 @@ class ImageRegistrator(object):
         flags = "" # Not using any flags
         find_additional_phase_shift = 'false'
         
-        ctfexec = ( "ctffind " + flags + " << STOP_PARSING \n" + mrcname )
+        ctfexec = ( "ctffind " + flags + " << STOP_PARSING \n" + mrcName )
         if input_is_a_movie == 'true' or input_is_a_movie == 'yes':
              ctfexec = ctfexec + "\n" + input_is_a_movie + "\n" + str(number_of_frames_to_average)
          
@@ -2434,12 +2789,12 @@ class ImageRegistrator(object):
             # Log has 5 comment lines, then 1 header, and
             # Micrograph number, DF1, DF2, Azimuth, Additional Phase shift, CC, and max spacing fit-to
             CTF4Results = np.loadtxt(logName, comments='#', skiprows=1 )
-            self.CTFInfo[u'DefocusU'] = CTF4Results[1]
-            self.CTFInfo[u'DefocusV'] = CTF4Results[2]
-            self.CTFInfo[u'DefocusAngle'] = CTF4Results[3]
-            self.CTFInfo[u'AdditionalPhaseShift'] = CTF4Results[4]
-            self.CTFInfo[u'CtfFigureOfMerit'] = CTF4Results[5]
-            self.CTFInfo[u'FinalResolution'] = CTF4Results[6]
+            self.CTFInfo[u'DefocusU'] = float( CTF4Results[1] )
+            self.CTFInfo[u'DefocusV'] = float( CTF4Results[2] )
+            self.CTFInfo[u'DefocusAngle'] = float( CTF4Results[3] )
+            self.CTFInfo[u'AdditionalPhaseShift'] = float( CTF4Results[4] )
+            self.CTFInfo[u'CtfFigureOfMerit'] = float( CTF4Results[5] )
+            self.CTFInfo[u'FinalResolution'] = float( CTF4Results[6] )
             
             self.CTFDiag = ioMRC.MRCImport( diagOutName )
             
@@ -2452,7 +2807,7 @@ class ImageRegistrator(object):
         # TODO: having trouble with files not being deletable, here.  Is CTFFIND4 holding them open?  Should 
         # I just pause for a short time?
         time.sleep(0.5) # DEBUG: try and see if temporary files are deletable now.
-        try: os.remove( mrcname )
+        try: os.remove( mrcName )
         except IOError: 
             print( "Could not remove temporary file: " + str(IOError.message) )
         try: os.remove( diagOutName )
@@ -2501,10 +2856,13 @@ class ImageRegistrator(object):
         logh.write( u"CS[mm], HT[kV], AmpCnst, XMAG, DStep[um]\n" )
         logh.write( u"%.2f"%self.C3 + u" %.1f"%self.voltage + u" " + 
             str(amp_contrast) + u" %.1f" %mag + u" %.2f"%dstep + u"\n" )
-
-        logh.write( u"%.1f"%self.CTFInfo['DefocusU']+ u" %.1f"%self.CTFInfo['DefocusV'] 
-            + u" %.4f"%self.CTFInfo['DefocusAngle']+ u" %.4f"%self.CTFInfo['CtfFigureOfMerit'] 
-            + u" Final Values\n ")
+        
+        try:
+            logh.write( u"%.1f"%self.CTFInfo['DefocusU']+ u" %.1f"%self.CTFInfo['DefocusV'] 
+                + u" %.4f"%self.CTFInfo['DefocusAngle']+ u" %.4f"%self.CTFInfo['CtfFigureOfMerit'] 
+                + u" Final Values\n ")
+        except:
+            print( "Warning: Could not write CTFInfo to ctf3-style log, probably CTF estimation failed" )
         logh.close()
         pass
     
@@ -2626,7 +2984,13 @@ class ImageRegistrator(object):
             # Load pixelsize from file
             try:
                 if bool( dm4obj.im[1].imageInfo['DimXScale'] ):
-                    self.pixelsize = dm4obj.im[1].imageInfo['DimXScale'] # DM uses units of nm
+                    if dm4obj.im[1].imageInfo[u'DimXUnits'] == u'\x14\x00': # This is what we get with no value set.
+                        print( "DM4 pixels have no units, keeping previously set pixelsize" )
+                        if self.pixelsize == None:
+                            self.pixelsize
+                        #else do nothing
+                    else:
+                        self.pixelsize = dm4obj.im[1].imageInfo['DimXScale'] # DM uses units of nm, we assume we don't have rectangular pixels because that's evil
             except KeyError: pass
             try: 
                 if bool(dm4obj.im[1].imageInfo['Voltage'] ):
@@ -2642,7 +3006,7 @@ class ImageRegistrator(object):
             except KeyError: pass    
             
             del dm4obj
-        elif file_ext == u".mrc" or file_ext == u'.mrcs':
+        elif file_ext == u".mrc" or file_ext == u'.mrcs' or file_ext == u".mrcz" or file_ext == u".mrczs":
             # Expects a MRC image stack
             tempData, header = ioMRC.MRCImport( self.files[target], returnHeader=True )
             # Force data to 32-bit float if it uint8 or uint16
@@ -2652,7 +3016,8 @@ class ImageRegistrator(object):
             # As old MotionCorr data has no pixelsize in the header, only accept if the MRC file has non-zero
             # This allows a pre-set of ImageRegistrator.pixelsize
             if not np.isclose( header[u'pixelsize'][0] , 0.0 ):
-                self.pixelsize = np.float32( header[u'pixelsize'][0] / 10.0 ) # Convert from Angstroms to nm
+                # Convert from Angstroms to nm performed internally
+                self.pixelsize = np.float32( header[u'pixelsize'][0]  ) 
             # Should try writing C3 and voltage somewhere 
         elif file_ext == u".hdf5" or file_ext == u".h5":
             
@@ -2683,13 +3048,14 @@ class ImageRegistrator(object):
             return
         
         #### GAIN REFERENCE MANAGEMENT ####
-        if target != u'gainRef' and bool(self.files[u'gainRef']):
+        if target != u'gainRef' and u'gainRef' in self.files and bool(self.files[u'gainRef']):
         
             # The Gatan gain reference is always a multiplication operation.  What of FEI and DE detectors?  
             if not np.any( self.gainRef ):
                 self.loadData( self.files[u'gainRef'], target=u'gainRef' )
             
             gainRef = self.gainRef
+
             # Apply gain reference to each tempData, this should broadcast with numexpr?
             print( "Applying gain reference: %s" % self.files[u'gainRef'] )
             tempData = nz.evaluate( "gainRef * tempData" )
@@ -2699,6 +3065,8 @@ class ImageRegistrator(object):
         # TODO: set self.files[] dict values?
         if target == u"stack" or target == u'align' or target == u'images':
             if tempData.ndim != 3: # Probably the user saved a 2D image by mistake
+                self.METAstatus = u"error"
+                self.saveConfig()
                 raise ValueError( "zorro.loadData: stacks must be 3D data" )
                 
             self.images = tempData
@@ -2713,19 +3081,27 @@ class ImageRegistrator(object):
                 ('Diagonal' in self.gainFlipsGatan and self.gainFlipsGatan['Diagonal'] and 
                 'Vertical' in self.gainFlipsGatan and self.gainFlipsGatan['Vertical'] ) ):
                 # This is an image mirror, usually.
+                print( "Rotating gain reference by 180 degrees (mirror)" )
                 tempData = np.rot90( tempData, k =2 )
             elif 'Horizontal' in self.gainFlipsGatan and self.gainFlipsGatan['Horizontal']:
+                print( "Flipping gain reference horizontally (mirror)" )
                 tempData = np.fliplr( tempData )
             elif 'Vertical' in self.gainFlipsGatan and  self.gainFlipsGatan['Vertical']:
+                print( "Flipping gain reference vertically (mirror)" )
                 tempData = np.flipud( tempData )
             # TODO: see if any other labs have some wierd configuration of flips and rotations.
                 
             # The Gatan gain reference has a lot of hot pixel artifacts, that we'll clip away for the moment
             # Perhaps we should explicitely use the same algorithm as the hot pixel mask.
-            gainSigma = 2.0
-            meanGain = np.mean( tempData )
-            stdGain = np.std( tempData )
-            np.clip( tempData, meanGain - gainSigma*stdGain, meanGain + gainSigma*stdGain, out=tempData )
+                
+            #gainCutoff = 1E-4
+            #gainLim = util.histClim( tempData, cutoff=gainCutoff )
+            #hotpix = ( tempData <= gainLim[0] ) | ( tempData >= gainLim[1] )
+            # Possibly we could skip the uniform filter and just force hot pixels to 
+            # 1.0?  I might get in trouble from a non-Gatan detector?
+            
+            # self.gainRef = ~hotpix*tempData + hotpix*scipy.ndimage.uniform_filter( tempData, size=5 )
+            #self.gainRef = ~hotpix*tempData + hotpix
             self.gainRef = tempData
             
         elif target == u"filt" or target == u'filtSum':
@@ -2760,6 +3136,14 @@ class ImageRegistrator(object):
 #            baseDir = os.path.dirname( self.files['stack'] )
         stackFront, stackExt = os.path.splitext( os.path.basename( self.files[u'stack'] ) )
         
+        print( "DEBUG: Zorro compressor = %s" % self.files['compressor'] )
+        if self.files['compressor'] == None:
+            mrcExt = ".mrc"
+            mrcsExt = ".mrcs"
+        else:
+            mrcExt = ".mrcz"
+            mrcsExt = ".mrcsz" 
+        
         # Change the current directory to make relative pathing sensible
 #        try:
 #            os.chdir( baseDir )
@@ -2771,7 +3155,7 @@ class ImageRegistrator(object):
             stackFront, stackExt = os.path.splitext( stackFront )
             
         if self.files[u'sum'] is None: # Default sum name
-            self.files[u'sum'] = os.path.join( u"sum", stackFront + u"_zorro.mrc" )
+            self.files[u'sum'] = os.path.join( u"sum", u"%s_zorro%s" %(stackFront, mrcExt) )
 
         # Does the directory exist?  Often this will be a relative path to file.config
         sumPath, sumFile = os.path.split( self.files[u'sum'] )
@@ -2784,7 +3168,8 @@ class ImageRegistrator(object):
         #### SAVE ALIGNED SUM ####
         if self.verbose >= 1:
             print( "Saving: " + os.path.join(sumPath,sumFile) )
-        ioMRC.MRCExport( self.imageSum, os.path.join(sumPath,sumFile), pixelsize=self.pixelsize*10.0 )
+        ioMRC.MRCExport( self.imageSum, os.path.join(sumPath,sumFile), pixelsize=self.pixelsize*10.0,
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
 
         # Compress sum
         if bool(self.doCompression):
@@ -2793,7 +3178,7 @@ class ImageRegistrator(object):
         #### SAVE ALIGNED STACK ####
         if bool(self.saveMovie):
             if self.files[u'align'] is None: # Default filename for aligned movie
-                self.files[u'align'] = os.path.join( u"align", stackFront + u"_zorro_movie.mrcs" )
+                self.files[u'align'] = os.path.join( u"align", u"%s_zorro_movie%s" % (stackFront, mrcsExt) )
                 
             # Does the directory exist?
             alignPath, alignFile = os.path.split( self.files[u'align'] )
@@ -2804,7 +3189,8 @@ class ImageRegistrator(object):
             
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(alignPath,alignFile) )
-            ioMRC.MRCExport( self.images, os.path.join(alignPath,alignFile), pixelsize=self.pixelsize*10.0 ) 
+            ioMRC.MRCExport( self.images, os.path.join(alignPath,alignFile), pixelsize=self.pixelsize*10.0,
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
 
             # Compress stack
             if bool(self.doCompression):
@@ -2812,7 +3198,7 @@ class ImageRegistrator(object):
                 
         if bool(self.filterMode) and np.any(self.filtSum): # This will be in the same place as sum
             if not u'filt' in self.files or self.files[u'filt'] is None: # Default filename for filtered sum
-                self.files[u'filt'] = os.path.join( relativeSumPath, os.path.splitext(sumFile)[0] + u"_filt" +  os.path.splitext(sumFile)[1] )
+                self.files[u'filt'] = os.path.join( relativeSumPath, u"%s_filt%s" %(os.path.splitext(sumFile)[0], mrcExt) )
             
             filtPath, filtFile = os.path.split( self.files[u'filt'] )
             if not os.path.isabs( filtPath ):
@@ -2820,15 +3206,17 @@ class ImageRegistrator(object):
                 
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(filtPath, filtFile) )
-            ioMRC.MRCExport( self.filtSum, os.path.join(filtPath, filtFile), pixelsize=self.pixelsize*10.0 ) 
+            ioMRC.MRCExport( self.filtSum, os.path.join(filtPath, filtFile), pixelsize=self.pixelsize*10.0,
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
 
         #### SAVE CROSS-CORRELATIONS FOR FUTURE PROCESSING OR DISPLAY ####
         if self.saveC:
-            self.files[u'xc'] = os.path.join( sumPath, os.path.splitext(sumFile)[0] + u"_xc.mrc" )
+            self.files[u'xc'] = os.path.join( sumPath, u"%s_xc%s" % (os.path.splitext(sumFile)[0],mrcsExt) )
             if self.verbose >= 1:
                 print( "Saving: " + self.files[u'xc'] )
                 
-            ioMRC.MRCExport( np.asarray( self.C, dtype='float32'), self.files[u'xc'], pixelsize=self.pixelsize*10.0 )
+            ioMRC.MRCExport( np.asarray( self.C, dtype='float32'), self.files[u'xc'], pixelsize=self.pixelsize*10.0,
+                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
             if bool(self.doCompression):
                 util.compressFile( self.files[u'xc'], self.compress_ext, n_threads=self.n_threads )
             
@@ -2929,6 +3317,8 @@ class ImageRegistrator(object):
         try: self.corrStats = json.loads( config.get(u'data', u'corrStats') )
         except: pass
         try: self.bench = json.loads( config.get(u'data', u'bench') )
+        except: pass
+        try: self.hotpixInfo = json.loads( config.get(u'data', u'hotpixInfo') )
         except: pass
         
 
@@ -3040,8 +3430,7 @@ class ImageRegistrator(object):
         except: pass
         try: self.doseFiltParam = json.loads( config.get( u'registration', u'doseFiltParam' ) ) # This one stays a list
         except: pass
-        try: self.hotpixSigma = config.getfloat( u'registration', u'hotpixSigma' )
-        except: pass
+
     
         # IO 
         try: self.files = json.loads( config.get( u'io', u'files' ) )
@@ -3188,7 +3577,7 @@ class ImageRegistrator(object):
         config.set( u'registration', u'doEvenOddFRC', self.doEvenOddFRC )
         if np.any( self.doseFiltParam ) and bool( self.filterMode ):
             config.set( u'registration', u'doseFiltParam', json.dumps( self.doseFiltParam ) )
-        config.set( u'registration', u'hotpixSigma', self.hotpixSigma )
+
         
         # CTF
         config.add_section( u'ctf' )
@@ -3232,6 +3621,7 @@ class ImageRegistrator(object):
     
         # Data
         config.add_section( u'data' )
+        config.set( u'data', u'hotpixInfo', json.dumps( self.hotpixInfo) )
         config.set( u'data', u'trackCorrStats', self.trackCorrStats )
         config.set( u'data', u'corrStats', json.dumps( self.corrStats) )
         config.set( u'data', u'bench', json.dumps( self.bench ) )
@@ -3302,6 +3692,9 @@ class ImageRegistrator(object):
             plotDict[u'pixelsize'] = self.pixelsize * binning
             imageSumBinned = util.magickernel( self.getSumCropToLimits(), k=1 )
             plotDict[u'image'] = imageSumBinned
+            # RAM: temporary expidient of filtering FFTs of large images to increase contrast
+            if self.imageSum.shape[0]*binning > 3072 and self.imageSum.shape[1]*binning > 3072:
+                plotDict[u'lowPass'] = 0.75
 
             if bool(self.savePNG):
                 plotDict[u'plotFile'] = os.path.join( self.files[u'figurePath'], self.plotDict[u'title'] + "_imageSum.png")
@@ -3319,6 +3712,9 @@ class ImageRegistrator(object):
             plotDict[u'pixelsize'] = self.pixelsize * binning
             filtSumBinned = util.magickernel( self.getFiltSumCropToLimits(), k=1 )
             plotDict[u'image'] = filtSumBinned        
+            # RAM: temporary expidient of filtering FFTs of large images to increase contrast
+            if self.imageSum.shape[0]*binning > 3072 and self.imageSum.shape[1]*binning > 3072:
+                plotDict[u'lowPass'] = 0.75
 
             if bool(self.savePNG):
                 plotDict[u'plotFile'] = os.path.join( self.files[u'figurePath'], self.plotDict[u'title'] + "_filtSum.png")
@@ -3336,6 +3732,10 @@ class ImageRegistrator(object):
             # We would like the cropped sum but that can be a wierd size that is slow for the FFT
             plotDict[u'image'] = self.imageSum 
             
+            # RAM: temporary expidient of filtering FFTs of large images to increase contrast
+            if self.imageSum.shape[0] > 3072 and self.imageSum.shape[1] > 3072:
+                plotDict[u'lowPass'] = 3.0
+            
             if bool(self.savePNG):
                 plotDict[u'plotFile'] = os.path.join( self.files[u'figurePath'], self.plotDict[u'title'] + "_FFTSum.png")
                 self.files[u'figFFTSum'] = plotDict[u'plotFile']
@@ -3351,6 +3751,11 @@ class ImageRegistrator(object):
             plotDict[u'pixelsize'] = self.pixelsize
             # We would like the cropped sum but that can be a wierd size that is slow for the FFT
             plotDict[u'image'] = self.imageSum     
+            
+            # RAM: temporary expidient of filtering FFTs of large images to increase contrast
+            if self.imageSum.shape[0] > 3072 and self.imageSum.shape[1] > 3072:
+                plotDict[u'lowPass'] = 1.5
+                
             if bool(self.savePNG):
                 plotDict[u'plotFile'] = os.path.join( self.files[u'figurePath'], self.plotDict[u'title'] + "_polarFFTSum.png")
                 self.files[u'figPolarFFTSum'] = plotDict[u'plotFile']
@@ -3479,6 +3884,7 @@ class ImageRegistrator(object):
             figPool.map( plot.generate, plotArgs )
             
             figPool.close()
+            figPool.terminate()
             # Wait for everyone to finish, otherwise on the infinityband cluster we have problems with partially rendered files.
             figPool.join() 
         else: # Windows mode, can also be used for debugging when plot goes haywire
@@ -3544,7 +3950,7 @@ class ImageRegistrator(object):
             # Render and save
             plt.tight_layout()
             plt.pause(0.05)
-            plt.savefig( "corrMap_%05d"%J + fex, dpi=self.plotDict['dpi'] )
+            plt.savefig( "corrMap_%05d"%J + fex, dpi=self.plotDict['image_dpi'] )
             plt.close( figCM )
             # corrMap = ( 255.0 * util.normalize(corrMap) ).astype('uint8')
             # Convert to colormap as follows: Image.fromarray( np.uint8( cm.ocean_r(stddesk)*255))
@@ -3578,6 +3984,8 @@ class ImageRegistrator(object):
         print( "----PROFILING TIMES----" )
         print( "    dtypes: float: %s, complex: %s" %(float_dtype, fftw_dtype) )
         print( "    images.dtype: %s" % self.images.dtype )
+        if str(self.images.dtype) == 'float64':
+            print( "    WARNING: running in double-precision (may be slow)" )
         print( "    Loading files (s): %.3f"%(self.bench['loaddata1'] - self.bench['loaddata0']) )
         try: print( "    Image/mask binning (s): %.3f"%(self.bench['bin1'] - self.bench['bin0']) ) 
         except: pass

@@ -20,16 +20,16 @@ import matplotlib.offsetbox
 # TODO: merge ims() functionality into zorroPlot
 import matplotlib.pyplot as plt
 import matplotlib.colors as col
-import scipy.ndimage as nd
+import scipy.ndimage as ni
 import zorro
-import os, os.path
+import os, os.path, sys
 
 ##################################################################################
 ######################## Object-oriented interface ###############################
 ##################################################################################
 class zorroPlot(object):
     
-    def __init__(self, filename=None, width=7, height=7, dpi=144, facecolor=[0.75,0.75,0.75,1.0], 
+    def __init__(self, filename=None, width=7, height=7, plot_dpi=72, image_dpi=144, facecolor=[0.75,0.75,0.75,1.0], 
                  MplCanvas = None, backend=u'Qt4Agg' ):
         """
         Object-oriented plotting interface for Zorro.
@@ -38,14 +38,15 @@ class zorroPlot(object):
         self.plotDict = {}
         self.plotDict[u'width'] = width
         self.plotDict[u'height'] = height
-        self.plotDict[u'dpi'] = dpi
+        self.plotDict[u'plot_dpi'] = plot_dpi
+        self.plotDict[u'image_dpi'] = image_dpi
         self.plotDict[u'facecolor'] = facecolor
         
         if bool(filename):
             print( "TODO: load and display file from zorroPlot.__init__()" )
         
         # http://stackoverflow.com/questions/13714454/specifying-and-saving-a-figure-with-exact-size-in-pixels
-        self.fig = matplotlib.figure.Figure(figsize=(width, height), facecolor=facecolor, dpi=dpi )
+        self.fig = matplotlib.figure.Figure(figsize=(width, height), facecolor=facecolor, dpi=plot_dpi )
         # This forces the plot window to cover the entire space by default
         self.axes = self.fig.add_axes( [0.0,0.0,1.0,1.0] )
         self.axes.hold(False) # We want the axes cleared every time plot() is called
@@ -89,7 +90,7 @@ class zorroPlot(object):
         #self.canvas.draw() # Necessary with show?
         self.canvas.show()
     
-    def printAndReturn( self ):
+    def printPlot( self, dpi_key = u"plot_dpi" ):
         """
         Any following commands shared amongst all plot functions go here for brevity.
         """
@@ -104,9 +105,11 @@ class zorroPlot(object):
             else: 
                 color = [1,1,1,1]
 
-            self.canvas.print_figure( self.plotDict[u'plotFile'], dpi=self.plotDict[u'dpi'], 
+            self.canvas.print_figure( self.plotDict[u'plotFile'], dpi=self.plotDict[dpi_key], 
                                      facecolor=color, edgecolor=color ) 
             return self.plotDict[u'plotFile']
+    
+
            
     def plotEmpty( self ):
         self.fig.clear()
@@ -130,7 +133,8 @@ class zorroPlot(object):
                 print( "pixmap boxes" )
                 #scaleDiff = np.array( self.plotDict['pixmap'].shape ) / np.array( self.plotDict['boxMask'].shape )
 
-                self.axes.imshow( self.plotDict[u'boxMask'], extent=mage.get_extent() )
+                self.axes.imshow( self.plotDict[u'boxMask'], 
+                                 extent=mage.get_extent(), interpolation='lanczos' )
             
         else:
             print( "No pixmap" )
@@ -141,7 +145,8 @@ class zorroPlot(object):
         self.fig.clear()
         self.axes = self.fig.add_axes( [0.0, 0.0, 1.0, 1.0] )
 
-    
+        if "lowPass" in self.plotDict:
+            self.plotDict['image'] = ni.gaussian_filter( self.plotDict['image'], self.plotDict["lowPass"] )
         clim = zorro.util.histClim( self.plotDict['image'], cutoff=1E-4 )
         self.axes.hold(True)
         mage = self.axes.imshow( self.plotDict['image'], vmin=clim[0], vmax=clim[1], interpolation='nearest', 
@@ -156,7 +161,7 @@ class zorroPlot(object):
         self.axes.set_axis_off()
         self.axes.hold(False)
         
-        return self.printAndReturn()
+        return self.printPlot( dpi_key=u'image_dpi' )
         
     def plotStack( self ):
         print( "TODO: implement plotStack" )
@@ -166,9 +171,14 @@ class zorroPlot(object):
         self.axes = self.fig.add_axes( [0.0, 0.0, 1.0, 1.0] )
         self.axes.hold(False)
 
-
-        FFTimage = np.log10( 1.0 + np.abs( np.fft.fftshift( np.fft.fft2( self.plotDict['image'] ))))
-        FFTclim = zorro.util.ciClim( FFTimage, sigma=1.5 )
+        FFTimage = np.fft.fft2( self.plotDict['image'] )
+        FFTimage[0,0] = 1.0 # Clip out zero-frequency pixel
+        
+        FFTimage = np.log10( 1.0 + np.abs( np.fft.fftshift( FFTimage )))
+        if "lowPass" in self.plotDict:
+            FFTimage = ni.gaussian_filter( FFTimage, self.plotDict["lowPass"] )
+            
+        FFTclim = zorro.util.ciClim( FFTimage, sigma=2.5 )
         mage = self.axes.imshow( FFTimage, interpolation='bicubic', vmin=FFTclim[0], vmax=FFTclim[1], 
                          cmap=self.plotDict['image_cmap'] )
         if 'pixelsize' in self.plotDict:
@@ -177,7 +187,7 @@ class zorroPlot(object):
         self.axes.set_axis_off()
         if bool(self.plotDict['colorbar']):
             self.fig.colorbar( mage, fraction=0.046, pad=0.04)
-        return self.printAndReturn()
+        return self.printPlot( dpi_key=u'image_dpi' )
                              
     def plotPolarFFT( self ):
         self.fig.clear()
@@ -185,7 +195,10 @@ class zorroPlot(object):
         self.axes.hold(False)
         
         polarFFTimage = zorro.util.img2polar( np.log10( 1.0 + np.abs( np.fft.fftshift( np.fft.fft2( self.plotDict['image'] )))) )
-        FFTclim = zorro.util.ciClim( polarFFTimage, sigma=1.5 )
+        if "lowPass" in self.plotDict:
+            polarFFTimage = ni.gaussian_filter( polarFFTimage, self.plotDict["lowPass"] )
+            
+        FFTclim = zorro.util.ciClim( polarFFTimage, sigma=2.0 )
         mage = self.axes.imshow( polarFFTimage, interpolation='bicubic', vmin=FFTclim[0], vmax=FFTclim[1], 
                          cmap=self.plotDict['image_cmap'] )
         if 'pixlsize' in self.plotDict:
@@ -196,7 +209,7 @@ class zorroPlot(object):
         if bool(self.plotDict['colorbar']):
             self.fig.colorbar( mage, fraction=0.046, pad=0.04)
             
-        return self.printAndReturn()                          
+        return self.printPlot( dpi_key=u'image_dpi' )                        
     # TODO: render Gautoauto outputs?  Maybe I should make the Gautomatch boxes seperately as a largely 
     # transparent plot, and just add it on top or not?
     
@@ -213,7 +226,7 @@ class zorroPlot(object):
         if bool(self.plotDict['colorbar']):
             self.fig.colorbar( corrmap, fraction=0.046, pad=0.04)
 
-        return self.printAndReturn()
+        return self.printPlot( dpi_key=u'plot_dpi' )
             
     def plotPeaksigTriMat( self ):
         self.fig.clear()
@@ -228,13 +241,13 @@ class zorroPlot(object):
         if bool(self.plotDict['colorbar']):
             self.fig.colorbar( psmap, fraction=0.046, pad=0.04)
         
-        return self.printAndReturn()                                  
+        return self.printPlot( dpi_key=u'plot_dpi' )                                
     
     def plotTranslations( self ):
         # rect is [left,bottom,width,height]
         self.fig.clear()
         self.axes = self.fig.add_axes( [0.12, 0.1, 0.85, 0.85] )
-        self.axes.hold(False)
+        self.axes.hold(True)
 
         
         if 'errorX' in self.plotDict:
@@ -243,12 +256,14 @@ class zorroPlot(object):
         else:
             self.axes.plot( self.plotDict['translations'][:,1], self.plotDict['translations'][:,0], 'k.-',
                    linewidth=2.0, markersize=16 )
-                       
+        self.axes.plot( self.plotDict['translations'][0,1], self.plotDict['translations'][0,0], 
+                       '.', color='purple', markersize=16 )
         self.axes.set_xlabel( 'X-axis drift (pix)' )
         self.axes.set_ylabel( 'Y-axis drift (pix)' )
         self.axes.axis('equal')
+        self.axes.hold(False)
         
-        return self.printAndReturn()       
+        return self.printPlot( dpi_key=u'plot_dpi' )
                              
     def plotPixRegError( self ):
         self.fig.clear()
@@ -278,7 +293,7 @@ class zorroPlot(object):
         self.axes2.set_xlabel( "Equation number" )
         self.axes2.set_ylabel( "Y-error estimate (pix)" )
         
-        return self.printAndReturn()       
+        return self.printPlot( dpi_key=u'plot_dpi' )   
                              
     def plotLogisticWeights( self ):
         self.fig.clear()
@@ -322,7 +337,7 @@ class zorroPlot(object):
         else:
             self.axes.legend( lines1, labels1, loc='best', fontsize=14 )
         
-        return self.printAndReturn()       
+        return self.printPlot( dpi_key=u'plot_dpi' )      
 
 
     def plotFRC( self ):
@@ -356,7 +371,7 @@ class zorroPlot(object):
         self.axes.legend( loc='best' )
         self.axes.hold(False)
         
-        return self.printAndReturn()
+        return self.printPlot( dpi_key=u'plot_dpi' )
             
     def plotCTFDiag( self ):
         self.fig.clear()
@@ -389,12 +404,12 @@ class zorroPlot(object):
                      u"$R:\/%.3f$\n"%CTFInfo['CtfFigureOfMerit'] +
                      u"$Fit\/res:\/%.1f\/\AA$"%CTFInfo['FinalResolution'] )
 
-        infobox = matplotlib.offsetbox.AnchoredText( results, pad=0.5, loc=1, prop={'size':13} )
+        infobox = matplotlib.offsetbox.AnchoredText( results, pad=0.5, loc=1, prop={'size':16} )
         self.axes.add_artist( infobox )
         
         self.axes.set_axis_off() # This is still not cropping properly...
         
-        return self.printAndReturn() 
+        return self.printPlot( dpi_key=u'plot_dpi' )
     
     def plotStats( self ):
         # Setup unicode statistics dictionary
@@ -433,7 +448,7 @@ class zorroPlot(object):
             self.fig.text( 0.5+fontfigspacing, 1 - (1+keycount)*fontfigspacing, value, size=fontsize )
             keycount += 1
 
-        return self.printAndReturn()
+        return self.printPlot( dpi_key=u'plot_dpi' )
     
     
 ##################################################################################
@@ -483,28 +498,69 @@ def generate( params ):
         return daPlot.plotCorrTriMat()
  
 
-class ims:
-    """
-    plotting.ims(image)
+IMS_HELPTEXT = """
+    Usage: ims <image_filename> <cutoff level>
+    
+    Valid types: .dm4, .mrc, .mrcs, .mrcz, .mrczs
     
     Shows individual frames in the 3D image (dimensions organized as [z,x,y]). 
+    "f" shows the view in full-screen
     "n" next frame, ("N" next by step of 10)
     "p" previous frame, ("P" previous by step of 10)
     "l" toogles the log scale. 
-    "c" swithces between 'jet','grey','hot' and 'hsv' colormaps. 
+    "y" toggles polar transform
+    "F" toggles Fourier transform
+    "c" swithces between gray, gnuplot, jet, nipy_spectral colormaps. 
     "h" turns on histogram-based contrast limits
     "i" zooms in
     "o" zooms out
+    "v" transposes (revolves) the axes so a different projection is seen.
     "arrows" move the frame around
+    "g" gaussian low-pass ( sharpen more with 'k', smoothen more with 'm')
     "r" resets the position to the center of the frame
-    "g" toogle local/global stretch
-    "q/Q" increase / decrease the lower limit of the contrast
-    "w/W" increase / decrease the upper limit of the contrast
+    "q" increase the contrast limits ("Q" is faster)
+    "w" decrease the contrast limits ("W" is faster)
     "R" reset contrast to default
+    "s" saves current view as PNG
     "S" shows sum projection
     "M" shows max projection
     "V" shows var projection    
-    "T" prints statistics
+    "t" print statistics for current frame
+    "T" prints statistics for entire stack
+    
+    """
+    
+class ims(object):
+    """
+    zorro.zorro_plotting.ims(image)
+    
+    Originally written by Ondrej Madula.
+    Modified by Robert A. McLeod
+    
+    Shows individual frames in the 3D image (dimensions organized as [z,x,y]). 
+    "f" shows the view in full-screen
+    "n" next frame, ("N" next by step of 10)
+    "p" previous frame, ("P" previous by step of 10)
+    "l" toogles the log scale. 
+    "y" toggles polar transform
+    "F" toggles Fourier transform
+    "c" swithces between gray, gnuplot, jet, nipy_spectral colormaps. 
+    "h" turns on sigma-scaled contrast limits
+    "i" zooms in
+    "o" zooms out
+    "v" transposes (revolves) the axes so a different projection is seen.
+    "arrows" move the frame around
+    "g" gaussian low-pass ( sharpen more with 'k', smoothen more with 'm')
+    "r" resets the position to the center of the frame
+    "q" increase the contrast limits ("Q" is faster)
+    "w" decrease the contrast limits ("W" is faster)
+    "R" reset contrast to default
+    "s" saves current view as PNG
+    "S" shows sum projection
+    "M" shows max projection
+    "V" shows var projection    
+    "t" print statistics for current frame
+    "T" prints statistics for entire stack
     
     Works with qt backend -> start ipython as: "ipyton --matplotlib qt" or do e.g.: "matplotlib.use('Qtg4Agg')"
 
@@ -514,94 +570,102 @@ class ims:
     plt.rcParams['keymap.pan'] = '' # to disable the binding of the key 'p'    
     plt.rcParams['keymap.grid'] = '' # to disable the binding of the key 'g'        
     plt.rcParams['keymap.zoom'] = '' # to disable the binding of the key 'o'            
-    def __init__(self, im, i=0, titles=None, cutoff = None ):
+    def __init__(self, im, index=0, titles=[u"",], logMode=False, fftMode=False, polarMode=False, blocking=False ):
         plt.ion()
+        #plt.pause(1E-4)
+        self.im = im
+        self.index = index
+        self.cmaps_cycle = itertools.cycle( [u"gray", u"gnuplot", u"jet", u"nipy_spectral"] )
+        self.cmap = next( self.cmaps_cycle )
+        self.exiting = False
+        self.logMode = logMode
+        self.polarMode = polarMode
+        self.fftMode = fftMode
+        self.sigmaMode = True
+        self.filterMode = False
+        self.__gaussSigma = 1.5
+        self.doTranspose = False
+        self.__currTitle = ""
+        self.__sigmaLevels = np.hstack( [np.array( [0.01, 0.02, 0.04, 0.06, 0.08]), 
+                                                  np.arange( 0.1, 10.1, 0.1 )])
+        self.__sigmaIndex = 31 # 3.0 sigma by default
+        self.blocking = blocking
         
-        if isinstance( im, str ):
-            # Try to load MRC or DM4 files
-            file_ext = os.path.splitext( im )[1]
-            if file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs":
-                im = zorro.ioMRC.MRCImport( im )
-            elif file_ext.lower() == ".dm4":
-                dm4struct = zorro.ioDM.DM4Import( im )
-                im = dm4struct.im[1].imageData
-                del dm4struct
-            else:
-                print( "Filename has unknown/unimplemented file type: " + im )
-                return
+        print( "ims: type(im) = %s" % type(im) )
+        
+        if sys.version_info >= (3,0):
+            if isinstance( self.im, str ):
+                print( "Try to load MRC or DM4 files" )
+                file_ext = os.path.splitext( self.im )[1]
+                if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
+                    file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
+                    self.im, self.header = zorro.ioMRC.MRCImport( self.im, returnHeader=True )
+                elif file_ext.lower() == ".dm4":
+                    dm4struct = zorro.ioDM.DM4Import( self.im )
+                    self.im = dm4struct.im[1].imageData
+                    self.header = dm4struct.im[1].imageInfo
+                    del dm4struct
+                else:
+                    print( "Filename has unknown/unimplemented file type: " + self.im )
+                    return
+        else:
+            if isinstance( self.im, str ) or isinstance(self.im, unicode):
+                print( "Try to load MRC or DM4 files" )
+                file_ext = os.path.splitext( self.im )[1]
+                if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
+                    file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
+                    self.im, self.header = zorro.ioMRC.MRCImport( self.im, returnHeader=True )
+                elif file_ext.lower() == ".dm4":
+                    dm4struct = zorro.ioDM.DM4Import( self.im )
+                    self.im = dm4struct.im[1].imageData
+                    self.header = dm4struct.im[1].imageInfo
+                    del dm4struct
+                else:
+                    print( "Filename has unknown/unimplemented file type: " + self.im )
+                    return
                 
-        if isinstance(im, tuple) or isinstance(im, list):
+        if isinstance( self.im, tuple) or isinstance( self.im, list):
             # Gawd tuples are annoyingly poorly typedefed
-            self.im = np.dstack( im )
+            self.im = np.array( self.im )
             
             print( "shape of tupled array: " + str(self.im.shape) )
             # Don't even bother checking, the complex representation needs to be re-written anyway
             self.complex = False
-        elif im.ndim is 2:
-            #if plt.iscomplex(im).any():
-            if isinstance(im.flatten()[0],(complex,np.complexfloating)):
+        elif self.im.ndim is 2:
+            if np.iscomplex(self.im).any():
                 self.complex = True
-                self.im = np.dstack([np.abs(im),np.angle(im)])                
+                self.im = np.array( [np.abs(self.im),np.angle(self.im)] )                
             else:                
                 self.complex = False
-                self.im = im
-        elif im.ndim is 3:
-            
-            if np.iscomplex( im ).any():
-                im = np.abs(im)
+            self.frameShape = self.im.shape
+            self.__imCount = 1
+        elif self.im.ndim is 3:
+            if np.iscomplex( self.im ).any():
+                self.im = np.abs(self.im)
             self.complex = False
-            self.im = np.dstack(im) # first dimension is the index of the stack
-#            if im.shape[0]<im.shape[2]:
-#                self.im = np.dstack(im)
-#            else:
-#                self.im = im
-#        elif isinstance( im, tables.carray.CArray ):
-#            # Code to handle PyTables type stack efficiently
-#            self.im = im
-#            if( np.iscomplex(self.im[:,:,0].any() ) ):
-#                self.complex = False # Force to be absolute value below
-#                # The upper level pytable is not a numpy array so accessing it like one is _very_ slow
-#                for J in np.arange(0,im.shape[2]):
-#                    self.im[:,:,J] = np.abs( self.im[:,:,J] )
-#            else:
-#                self.complex = False
+            self.frameShape = self.im.shape[1:]
+            self.__imCount = self.im.shape[0]
+            
+        
+        self.__minList = np.nan * np.empty( self.__imCount )  # Could retrieve this from MRC files?
+        self.__maxList = np.nan * np.empty( self.__imCount ) # Could retrieve this from MRC files?
+        self.__meanList = np.nan * np.empty( self.__imCount ) # Could retrieve this from MRC files?
+        self.__stdList = np.nan * np.empty( self.__imCount ) # Could retrieve this from MRC files?
+            
+        print( "IMS self.im.shape = %s" % str(self.im.shape) )
             
         self.dtype = self.im.dtype
-        self.i = i 
         self.titles = titles
-        if cutoff is None:
-            self.histogramClimMode = False
-        else:
-            self.histogramClimMode = True
-            self.cutoff = cutoff
+        
             
-        self.logon = False
-        self.cmap = 0
-        self.projToggle = 0
+        
+        self.projToggle = False
         self.zoom = 1
-        self.globalScale = 0
         self.offx,self.offy = 0,0
         self.stepXY = 24 # step of the movement up-down, left-right
 
-        # RAM This is terribly inefficient to call abs first...
-        # self.vmin,self.vmax = np.abs(im).min(),np.abs(im).max()
-        
-        # RAM: I don't know what this is doing...
-        # So remove it
-        #t0 = time.time()
-        #fim = np.log10(self.im.flatten())
-        #t1 = time.time()
-        #print "Time to call np.log on entire set (s): " + str( t1 - t0 )
-        #if all(fim==-np.inf): # this is for the zero image
-        #    self.vminLog,self.vmaxLog=-np.inf,-np.inf
-        #elif all(fim==np.inf): # this is for the inf image
-        #    self.vminLog,self.vmaxLog=np.inf,np.inf            
-        #else:            
-        #    self.vminLog,self.vmaxLog = fim[fim>-nFABOnly_kmeans_it005_class001.mrcp.inf].min(),fim[fim<np.inf].max()
-#        if self.vminLog == self.vmaxLog:
-#            self.vmaxLog += sys.float_info.epsilon
         self.offVmin,self.offVmax = 0,0
-        self.frameShape = self.im.shape[:2]
+        
         self.showProfiles = False
         if not(self.showProfiles):
             self.fig = plt.figure()
@@ -609,267 +673,335 @@ class ims:
             print( "Shown in figure %g."%self.figNum)
             self.ax = self.fig.add_subplot(111)
         else:
-            ################
-            # definitions for the axes
-            widthProf = 0.1
-            left, width = 0.05, 0.75
-            bottomProf = 0.05
-            bottom, height = widthProf + bottomProf + 0.05, 0.75
-
-            leftProf = left + width + 0.05
-            
-            rect_im = [left, bottom, width, height]
-            rect_X = [left, bottomProf, width, widthProf] # horizontal
-            rect_Y = [leftProf, bottom, widthProf, height] # vertical
-            
-            # start with a rectangular Figure
-            self.fig = plt.figure(figsize=(8,8))        
-            self.ax = plt.axes(rect_im)
-            self.axX = plt.axes(rect_X)
-            self.axY = plt.axes(rect_Y)
-
-            nullfmt = plt.NullFormatter()         # no labels
-            self.axX.xaxis.set_major_formatter(nullfmt)
-            self.axX.yaxis.set_major_formatter(nullfmt)
-            self.axY.xaxis.set_major_formatter(nullfmt)
-            self.axY.yaxis.set_major_formatter(nullfmt)
-            self.posProfHoriz = np.round(self.frameShape[0]/2)
-            self.posProfVert = np.round(self.frameShape[1]/2)
+            self.fig = plt.figure(figsize=(10,10)) 
+            self.ax = self.fig.axes
+            self.__setaxes__()
 
         ################
         
-        self.draw()
-        self.fig.canvas.mpl_connect('key_press_event',self)
+        self.__recompute__()
+        self.fig.canvas.mpl_connect('key_press_event',self.__call__ )
+        self.fig.canvas.mpl_connect( 'close_event', self.__exit__ )
+        plt.show( block=self.blocking )
+        # plt.ion()
+        
+    def __setaxes__(self):
+        self.ax.cla()
+        
+        ################
+        # definitions for the axes
+        widthProf = 0.1
+        left, width = 0.05, 0.75
+        bottomProf = 0.05
+        bottom, height = widthProf + bottomProf + 0.05, 0.75
 
-    def draw(self):
-        plt.cla()
-        tit=str()
+        leftProf = left + width + 0.05
+        
+        rect_im = [left, bottom, width, height]
+        rect_X = [left, bottomProf, width, widthProf] # horizontal
+        rect_Y = [leftProf, bottom, widthProf, height] # vertical
+        
+        # start with a rectangular Figure
+        self.ax = plt.axes(rect_im)
+        self.axX = plt.axes(rect_X)
+        self.axY = plt.axes(rect_Y)
+
+        nullfmt = plt.NullFormatter()         # no labels
+        self.axX.xaxis.set_major_formatter(nullfmt)
+        self.axX.yaxis.set_major_formatter(nullfmt)
+        self.axY.xaxis.set_major_formatter(nullfmt)
+        self.axY.yaxis.set_major_formatter(nullfmt)
+        self.posProfHoriz = np.round(self.frameShape[0]/2)
+        self.posProfVert = np.round(self.frameShape[1]/2)
+            
+    def __recompute__(self):
+        
+        if self.doTranspose:
+            self.doTranspose = False
+            self.im = np.transpose( self.im, axes=[2,0,1] )
+            print( "Tranposed axes shape: %s" % str(self.im.shape) )
+            self.__setaxes__()
+            
         if self.im.ndim is 2:
-            im = self.im
+            self.__currTitle = self.titles[0]
+            self.im2show = self.im
         elif self.im.ndim is 3:
-            im = self.im[...,self.i]
-            tit='frame {0}'.format(self.i)+'/'+str(self.im.shape[2]-1)
+            if len(self.titles) == self.im.shape[0]:
+                self.__currTitle = self.titles[self.index]
+            else:
+                self.__currTitle = self.titles[0]
+                
+            self.im2show = np.squeeze( self.im[self.index,...] )
+            self.__currTitle = 'frame %d/%d' % (self.index, self.im.shape[0]-1)
             # projections            
             if self.projToggle:
                 if self.projType=='M':
-                    im=self.im.max(2)
-                    tit = 'max projection'                    
+                    self.im2show = self.im.max(axis=0)
+                    self.__currTitle = 'max proj'                    
                 if self.projType=='S':
-                    im=self.im.sum(2)
-                    tit = 'sum projection'            
+                    self.im2show = self.im.sum(axis=0)
+                    self.__currTitle = 'sum proj'            
                 if self.projType=='V':
-                    im=plt.var(self.im,2)
-                    tit = 'var projection'            
+                    self.im2show = np.var(self.im,axis=0)
+                    self.__currTitle = 'var proj'            
         if self.complex:
-            tit += ', cplx (0=abs,1=phase)'
-        if self.logon:
-            tit += ', log10'
-            minval = 0 #sys.float_info.epsilon
-            if (im <= minval).any():
-                # RAM (FIXED): this isn't quite right, we need to mask out these pixels 
-                # im2show = np.log10(im.clip(min=minval) + (im <= 0) )
-                # RAM: alternatively we could just add the minimum value to the whole matrix
-                im2show = np.log10( im - (np.min(im) - 1.0) )
-            else: 
-                im2show = np.log10(im)
-#            if self.globalScale:  
-#                vrange = self.vmaxLog - self.vminLog
-#                vmin_tmp=self.vminLog + self.offVmin*vrange
-#                vmax_tmp=self.vmaxLog - self.offVmax*vrange   
-#                tit += ', global scale'
-#            else:
-#                fi = im2show.flatten()
-#                immin = fi[fi>-np.inf].min()
-#                immax = fi[fi<np.inf].max()               
-#                vrange = immax - immin
-#                vmin_tmp = immin + self.offVmin*vrange
-#                vmax_tmp = immax - self.offVmax*vrange
-#        elif type( self.im ) == tables.carray.CArray:
-#            im = self.im[:,:,self.i]
-        else:
-            tit += ', lin'
-            im2show = im
-#            if self.globalScale:
-#                vrange = self.vmax-self.vmin
-#                vmin_tmp=self.vmin + self.offVmin*(vrange)
-#                vmax_tmp=self.vmax - self.offVmax*(vrange)
-#                tit += ', global scale'
-#            else:
-#                immin,immax = im2show.min(),im2show.max()
-#                vrange = immax - immin
-#                vmin_tmp = immin + self.offVmin*vrange
-#                vmax_tmp = immax - self.offVmax*vrange
+            self.__currTitle += ', cplx (0=abs,1=phase)'
+        if self.fftMode:
+            self.__currTitle += ", fft"
+            self.im2show = np.abs(np.fft.fftshift( np.fft.fft2( self.im2show ) ))
 
+            
+        if self.polarMode:
+            self.__currTitle += ", polar"
+            self.im2show = zorro.zorro_util.img2polar( self.im2show )
+        if self.filterMode:
+            self.__currTitle += ", gauss%.2f" % self.__gaussSigma
+            self.im2show = ni.gaussian_filter( self.im2show, self.__gaussSigma )
+        if self.logMode:
+#            # TODO: this can be sent to matplotlib as an argument in imshow instead
+            self.__currTitle += ', log10'
+            if np.any(self.im <= 0.0):
+                # RAM: alternatively we could just add the minimum value to the whole matrix
+                 self.im2show = np.log10( self.im2show - np.min( self.im2show ) + 1.0 )
+            else:
+                self.im2show = np.log10( self.im2show )
+        else:
+            self.__currTitle += ', lin'
+            
+        # We need to compute image-wide statistics
+        if self.sigmaMode:
+            self.__meanList[self.index] = np.mean( self.im2show )
+            self.__stdList[self.index] = np.std( self.im2show )
+        else:
+            self.__minList[self.index] = np.min( self.im2show )
+            self.__maxList[self.index] = np.min( self.im2show )
+        self.__draw__()
+            
+    def __draw__(self):
+        print( "Called ims.draw()" )
+        plt.cla()
+        
+        tit = self.__currTitle + ""
         if self.zoom > 1:
             tit += ', zoom %g x'%(self.zoom)
             
-#        if self.offVmin or self.offVmax:
-#            tit += ', contrast L%g %% H%g %%'%(round(self.offVmin*100),round(self.offVmax*100))
-        if self.cmap==0:
-            plt.jet()
-        elif self.cmap==1:
-            plt.gray()   
-        elif self.cmap==2:
-            plt.set_cmap( 'gnuplot')
-        elif self.cmap==3:
-            plt.set_cmap( 'gist_earth')
-        if self.titles==None:
-            self.ax.set_title(tit)
-        else:
-            try:
-                self.ax.set_title(self.titles[self.i])
-            except:
-                pass
             
-
-        
-        # plt.colorbar(im)
-        plt.show()        
         hx,hy = self.frameShape[0]/2., self.frameShape[1]/2.
         lx,ly = hx/(self.zoom),hy/(self.zoom)
 
-        rx_low = max( min(np.floor(hx) + self.offx - np.floor(lx),self.frameShape[0]-self.stepXY),0.0)
-        rx_high = min(max(np.floor(hx) + self.offx + np.ceil(lx),self.stepXY),self.frameShape[0])
-        rx = np.arange(rx_low,rx_high)[:,np.newaxis].astype(int)
+        rx_low = np.maximum( np.minimum(np.floor(hx) + self.offx - np.floor(lx),self.frameShape[0]-self.stepXY),0.0)
+        rx_high = np.minimum(np.maximum(np.floor(hx) + self.offx + np.ceil(lx),self.stepXY),self.frameShape[0])-1
+        # RAM: this is a very expensive indicing operation...
+        #rx = np.arange(rx_low,rx_high)[:,np.newaxis].astype( 'int32' )
 
 
-        ry_low = max(min(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
-        ry_high = min(max(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])
-        ry = np.arange(ry_low,ry_high).astype(int)
-#        rx = (rx[np.minimum(rx>=0,rx<self.frameShape[1])]).astype(int)
-#        ry = (ry[np.minimum(ry>=0,ry<self.frameShape[0])][:,np.newaxis]).astype(int)
-        if self.histogramClimMode:
-            new_clims = zorro.util.histClim( im2show[rx,ry], cutoff=self.cutoff )
-            #print( "New clims: " + str(new_clims) )
-            vmin_tmp = new_clims[0]
-            vmax_tmp = new_clims[1]
+        ry_low = np.maximum( np.minimum(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
+        ry_high = np.minimum( np.maximum(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])-1
+        #ry = np.arange(ry_low,ry_high).astype( 'int32' )
+
+        if self.sigmaMode:
+            
+            if np.isnan( self.__meanList[self.index] ):
+                self.__meanList[self.index] = np.mean( self.im2show )
+                self.__stdList[self.index] = np.std( self.im2show )
+            clim_min = self.__meanList[self.index] - self.__sigmaLevels[self.__sigmaIndex]*self.__stdList[self.index]
+            clim_max = self.__meanList[self.index] + self.__sigmaLevels[self.__sigmaIndex]*self.__stdList[self.index]
+            tit += ", $\sigma$%.2f clim[%.1f,%.1f]" % (self.__sigmaLevels[self.__sigmaIndex], clim_min, clim_max)
         else:
-            vmin_tmp = np.min( im2show[rx,ry] )
-            vmax_tmp = np.max( im2show[rx,ry] )
-        
+            if np.isnan( self.__minList[self.index] ):
+                self.__minList[self.index] = np.min( self.im2show )
+                self.__maxList[self.index] = np.max( self.im2show )
+            clim_min = self.__minList[self.index]
+            clim_max = self.__maxList[self.index]
+            tit += ", clim[%.1f,%.1f]" % (clim_min, clim_max)
 
-        self.ax.imshow(im2show[rx,ry], vmin=vmin_tmp, vmax=vmax_tmp, interpolation='Nearest',extent=[ry[0],ry[-1],rx[-1],rx[0]])
+        # LogNorm really isn't very failsafe...
+#        if self.logMode:
+#            norm = col.LogNorm()
+#        else:
+#            norm = None
+        norm = None
+        
+        self.ax.set_title( tit )
+        self.ax.imshow(self.im2show[rx_low:rx_high,ry_low:ry_high], 
+                       vmin=clim_min, vmax=clim_max, 
+                       interpolation='Nearest',
+                       norm=norm,
+                       extent=[ry_low,ry_high,rx_low,rx_high], 
+                        cmap=self.cmap )
         # plt.colorbar(self.ax)
         def format_coord(x, y):
             x = np.int(x + 0.5)
             y = np.int(y + 0.5)
             try:
                 #return "%s @ [%4i, %4i]" % (round(im2show[y, x],2), x, y)
-                return "%.5G @ [%4i, %4i]" % (im2show[y, x], y, x) #first shown coordinate is vertical, second is horizontal
+                return "%.5G @ [%4i, %4i]" % (self.im2show[y, x], y, x) #first shown coordinate is vertical, second is horizontal
             except IndexError:
                 return ""
         self.ax.format_coord = format_coord
         if 'qt' in plt.matplotlib.get_backend().lower():
             self.fig.canvas.manager.window.raise_() #this pops the window to the top    
-        if self.showProfiles:
-            posProf = self.posProfHoriz
-            self.axX.cla()
-            self.axX.plot(rx+1,im2show[posProf,rx])
-#            plt.xlim(rx[0],rx[-1])
-            self.axX.set_xlim(rx[0],rx[-1])
-    def printStat(self):
-        if self.globalScale:
+        # TODO: X-Y profiles
+#        if self.showProfiles:
+#            posProf = self.posProfHoriz
+#            self.axX.cla()
+#            self.axX.plot(rx+1,self.im2show[posProf,rx])
+##            plt.xlim(rx[0],rx[-1])
+#            self.axX.set_xlim(rx[0],rx[-1])
+            
+        plt.show( block=self.blocking )   
+            
+    def printStat(self, mode='all'):
+        
+        if mode == 'all':
             modePrint = 'all frames'
             img = self.im
             if self.complex:            
-                modePrint = 'modulus'
-                img = self.im[...,0]
-
-        else:
+                modePrint = 'the modulus'
+                img = self.im[0,...]
+        elif mode == 'curr':
             if self.im.ndim > 2:
-                img = self.im[...,self.i]
-                modePrint = 'frame %g'%self.i               
+                img = self.im[self.index, ...]
+                modePrint = 'frame %d'%self.index             
             else:
                 img = self.im
-                modePrint = 'frame'
-        print( "\n-----"           )             
-        print( "Statistics of the " + modePrint + " in figure %g:"%self.figNum)
+                modePrint = 'the current frame'
+        else:
+            print( "Unknown statistics mode: %s" % mode )
+            return
+            
+        print( "===========================================" )             
+        print( "Statistics of " + modePrint + " in figure %g:"%self.figNum)
         print( "Shape: ", img.shape             ) 
         print( "Maximum: ", img.max(), "@", np.unravel_index(np.argmax(img),img.shape))
         print( "Minimum: ", img.min(), "@", np.unravel_index(np.argmin(img),img.shape))
-        print( "Center of mass:", nd.measurements.center_of_mass(img))
+        print( "Center of mass:", ni.measurements.center_of_mass(img))
         print( "Mean: ", img.mean())
         print( "Standard deviation: ", img.std())
         print( "Variance: ", img.var()        )
         print( "Sum: ", img.sum())
         print( "Data type:", self.dtype)
-        self.draw()
-        self.fig.canvas.draw()
+        print( "===========================================" )  
 
 
+
+    def __exit__(self, event):
+        print( "Exiting IMS" )
+        self.exiting = True
+        sys.exit()
+        
     def __call__(self, event):
-#        old_i = self.i
+        redraw = False
+        recompute = False
+        print( "Received key press %s" % event.key )
+
         if event.key=='n':#'up': #'right'
             if self.im.ndim > 2:
-                self.i = min(self.im.shape[2]-1, self.i+1)
+                self.index = np.minimum(self.im.shape[0]-1, self.index+1)
+            recompute = True
         elif event.key == 'p':#'down': #'left'
             if self.im.ndim > 2:
-                self.i = max(0, self.i-1)
+                self.index = np.maximum(0, self.index-1)
+            recompute = True
         if event.key=='N':#'up': #'right'
             if self.im.ndim > 2:        
-                self.i = min(self.im.shape[2]-1, self.i+10)
+                self.index = np.minimum(self.im.shape[2]-1, self.index+10)
+            recompute = True
         elif event.key == 'P':#'down': #'left'
             if self.im.ndim > 2:        
-                self.i = max(0, self.i-10)
+                self.inex = np.maximum(0, self.index-10)
+            recompute = True
+        elif event.key == 'v':
+            self.doTranspose = True
+            recompute = True
         elif event.key == 'l':
-            self.logon = np.mod(self.logon+1,2)            
+            self.logMode = ~ self.logMode       
+            recompute = True
         elif event.key == 'c':
-            self.cmap = np.mod(self.cmap+1,4)
+            self.cmap = next( self.cmaps_cycle)
+            redraw = True
         elif event.key == 'h':
-            if self.histogramClimMode:
-                self.histogramClimMode = False
-            else:
-                self.histogramClimMode = True
-            
-        elif event.key in 'SMV':
-            self.projToggle = np.mod(self.projToggle+1,2)
-            self.projType = event.key
-        elif event.key == 'i':
-            if 4*self.zoom < min(self.im.shape[:1]): # 2*zoom must not be bigger than shape/2
-                self.zoom = 2*self.zoom
-        elif event.key == 'o':
-            self.zoom = max(self.zoom/2,1)            
+            self.sigmaMode = ~self.sigmaMode
+            redraw = True
         elif event.key == 'g':
-            self.globalScale = np.mod(self.globalScale+1,2)
+            self.filterMode = ~self.filterMode
+            recompute = True
+        elif event.key == 'k':
+            self.__gaussSigma /= 1.5
+            if self.filterMode:
+                recompute = True
+        elif event.key == 'm':
+            self.__gaussSigma *= 1.5
+            if self.filterMode:
+                recompute = True
+        elif event.key == 'F': # FFT
+            self.fftMode = ~self.fftMode
+            recompute = True
+        elif event.key == 'y': # polar (cYlindrical)
+            self.polarMode = ~self.polarMode            
+            recompute = True
+        elif event.key in 'SMV':
+            self.projToggle = ~self.projToggle
+            self.projType = event.key
+            recompute = True
+        elif event.key == 'i':
+            if 4*self.zoom < np.min(self.im.shape[:1]): # 2*zoom must not be bigger than shape/2
+                self.zoom = 2*self.zoom
+            redraw = True
+        elif event.key == 'o':
+            self.zoom = np.max(self.zoom/2,1)     
+            redraw = True
+            
         elif event.key == 'right':
             self.offy += self.stepXY
-            self.offy = min(self.offy,self.im.shape[0]-1)
+            self.offy = np.min(self.offy,self.im.shape[0]-1)
+            redraw = True
         elif event.key == 'left':
             self.offy -= self.stepXY
-            self.offy = max(self.offy,-self.im.shape[0]+1)            
-            
+            self.offy = np.max(self.offy,-self.im.shape[0]+1)            
+            redraw = True
         elif event.key == 'down':
             self.offx += self.stepXY
-            self.offx = min(self.offx,self.im.shape[1]-1)            
+            self.offx = np.min(self.offx,self.im.shape[1]-1)    
+            redraw = True
         elif event.key == 'up':
             self.offx -= self.stepXY
-            self.offx = max(self.offx,-self.im.shape[1]+1)
+            self.offx = np.max(self.offx,-self.im.shape[1]+1)
+            redraw = True
         elif event.key == 'r': # reset position to the center of the image
             self.offx,self.offy = 0,0
             print( "Reseting positions to the center.")
+            redraw = True
         elif event.key == 'R': # reset contrast
             self.offVmin,self.offVmax = 0,0
             print( "Reseting contrast.")
-        elif event.key == 'q': # increase lower limit of the contrast
-            self.offVmin = min(self.offVmin+.1,1)        
-        elif event.key == 'Q': # decrease lower limit of the contrast
-            self.offVmin = max(self.offVmin-.1,0)
-        elif event.key == 'w': # increase upper limit of the contrast
-            self.offVmax = min(self.offVmax+.1,1)        
-        elif event.key == 'W': # decrease upper limit of the contrast
-            self.offVmax = max(self.offVmax-.1,0)
+            redraw = True
+        elif event.key == 'q': # increase contrast
+            self.__sigmaIndex = np.maximum( self.__sigmaIndex-1, 0 )
+            redraw = True
+        elif event.key == 'Q': # increase contrast quickly
+            self.__sigmaIndex = np.maximum( self.__sigmaIndex-5, 0 )
+            redraw = True
+        elif event.key == 'w': # decrease contrast
+            self.__sigmaIndex = np.minimum( self.__sigmaIndex+1, self.__sigmaLevels.size )
+            redraw = True
+        elif event.key == 'W': # decrease contrast quickly
+            self.__sigmaIndex = np.minimum( self.__sigmaIndex+5, self.__sigmaLevels.size )
+            redraw = True
 #            print "Increasing upper limit of the contrast: %g %% (press R to reset).\n"%round(self.offVmax*100)
         elif event.key == 'T': # print statistics of the whole dataset
-            self.printStat(),                      
-            print( "-----")
+            self.printStat()                  
+            redraw = False
         elif event.key == 't': # print statistics of the current frame
-            self.printStat(mode = 'current frame'),                      
-            print( "-----")
+            self.printStat(mode = 'curr'),                      
+            redraw = False
 
-#        if old_i != self.i:            
-#        print self.offx
-        self.draw()
-        self.fig.canvas.draw()
+        # Recompute is dominate over draw
+        if recompute:
+            self.__recompute__()
+        elif redraw:
+            self.__draw__()
+        # self.fig.canvas.draw()
 
 def im(my_img,ax=None,**kwargs):
     "Displays image showing the values under the cursor."
@@ -1028,42 +1160,41 @@ def ca():
 
 def main():
     # Get command line arguments
-    import sys
+
     
     # First argument is the executed file
     # print sys.argv 
-    print( """
-    Shows individual frames in the 3D image (dimensions organized as [z,x,y]). 
-    "n" next frame, ("N" next by step of 10)
-    "p" previous frame, ("P" previous by step of 10)
-    "l" toogles the log scale. 
-    "c" swithces between 'jet','grey','hot' and 'hsv' colormaps. 
-    "h" turns on histogram-based contrast limits
-    "i" zooms in
-    "o" zooms out
-    "arrows" move the frame around
-    "r" resets the position to the center of the frame
-    "g" toogle local/global stretch
-    "q/Q" increase / decrease the lower limit of the contrast
-    "w/W" increase / decrease the upper limit of the contrast
-    "R" reset contrast to default
-    "S" shows sum projection
-    "M" shows maximum projection
-    "V" shows variance projection    
-    "T" prints statistics
-""")
+    print( IMS_HELPTEXT )
     
-    if len( sys.argv ) >= 3:
-        cutoff = np.float32( sys.argv[2] )
-    else:
-        cutoff = None
+    fftMode = False
+    polarMode = False
+    logMode = False
+    if "--log" in sys.argv:
+        logMode = True
+    if "--fft" in sys.argv:
+        fftMode = True
+        logMode = True
+    if "--polarfft" in sys.argv:
+        fftMode = True
+        polarMode = True
+        logMode = True
+    # Blocking seems to interrupt key presses?  I think I need a polling loop then.
+
         
-    ims( sys.argv[1], cutoff=cutoff )
+    # http://matplotlib.org/users/event_handling.html
+    #if os.name == "nt":
+    #    blocking  = True
+    #else:
+        
+    blocking = False 
+        
+    imsObj = ims( sys.argv[1], logMode=logMode, fftMode=fftMode, polarMode=polarMode, blocking=blocking )
+    
+    # plt.ion()
     # Need to hold here.
-    try:
-        input( "Press enter to close IMS" )
-    except SyntaxError:
-        pass
+    # Doesn't work on Windows, why? Make plt.show( block=True ) call inside IMS instead
+    while not imsObj.exiting:
+        plt.pause(0.1)
     sys.exit()
     
 #### COMMAND-LINE INTERFACE ####

@@ -53,12 +53,23 @@ except:
 import numpy as np
 
 
-progname = os.path.basename(sys.argv[0])
-progversion = u"0.5.0"
-extensionlist = ['*.dm4', '*.dm3', '*.mrc', '*.mrcs', '*.hdf5', '*.h5', 
+#progname = os.path.basename(sys.argv[0])
+#progversion = u"0.7.1b0"
+from .__version__ import __version__
+
+extensionlist = ['*.dm4', '*.dm3', '*.mrc', "*.mrcz", '*.mrcs', "*.mrcsz", '*.hdf5', '*.h5', 
                  '*.dm4.bz2', '*.dm3.bz2', '*.mrc.bz2', '*.mrcs.bz2', '*.hdf5.bz2', '*.h5.bz2', 
                  '*.dm4.gz', '*.dm3.gz', '*.mrc.gz', '*.mrcs.gz', '*.hdf5.gz', '*.h5.gz']
 
+#STATE_COLORS = { NEW:u'darkorange', CHANGING:u'darkorange', STABLE:u'goldenrod', SYNCING:u'goldenrod', READY:u'forestgreen',
+#                PROCESSING:u'forestgreen', FINISHED:u'indigo', ARCHIVING:u'saddlebrown', COMPLETE:u'dimgrey', 
+#                STALE:u'firebrick', HOST_BUSY:u'host_busy', HOST_FREE:u'host_free', HOST_ERROR:u'firebrick', 
+#                RENAME:u'rename' }
+
+TOOLTIP_STATUS = { u'darkorange':u'New', u'goldenrod':u'Stable', u'indigo':u'Finished', 
+                  u'saddlebrown':u'Archiving', u'forestgreen':u'Ready', u'steelblue':'Processing',
+                  u'dimgrey':u'Complete', u'firebrick':u'Error', u'black':u'Unknown',
+                  u'deeppink':u'Syncing', u'':u'Unknown', u'rename':u'Renaming' }
 
 #class Automator(Ui_Automator_ui, QtGui.QApplication):
 class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
@@ -82,6 +93,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # Force absolute paths to icons
         self.joinIconPaths()
         
+
+        
+        
         # Zorro objects and the default one built from the GUI
         self.zorroDefault = zorro.ImageRegistrator()
         
@@ -91,36 +105,17 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.skulk.automatorSignal.connect( self.updateFromSkulk )
         self.skulkThread = None
 
-        # Setup default dicts so we have some values.
-#        import numexprz as nz
-#        def countPhysicalProcessors():
-#            
-#            cpuInfo = nz.cpu.info
-#            physicalIDs = []
-#            for J, cpuDict in enumerate( cpuInfo ):
-#                if not cpuDict['physical id'] in physicalIDs:
-#                    physicalIDs.append( cpuDict['physical id'] )
-#            return len( physicalIDs )
-
-        
+        self.initClusterConfig()
+        # I should populate these with the default values from QtDesigner
         self.cfgCommon = {}
-        print( "DEBUG: Is cpu counting causing crashes on CentOS 6.5???" )
-#        try:
-#            cpuCoresPerProcessor = np.int(nz.cpu.info[0]['cpu cores'])
-#            self.cfgCluster = { u'n_threads':cpuCoresPerProcessor, 
-#            u'n_processes':countPhysicalProcessors(), u'n_syncs':2, u'cluster_type': u'local' }
-#        except:
-#            # Use default values if the system can't figure things out for itself
-#            self.cfgCluster = { u'n_threads':8, u'n_processes':2, u'n_syncs':2, 
-#                                   u'cluster_type': u'local' }
-        self.cfgCluster = { u'n_threads':8, u'n_processes':2, u'n_syncs':2, u'cluster_type': u'local' }
         self.cfgGauto = {}
         self.cfgGplot = {}
         
-        self.updateFileList()
+        self.stateIds = {} # Link unique Id to name
+        self.reverseIds = {} # Opposite to above
+        
 
-        self.statusbar.showMessage( "Welcome to Automator for Zorro and 2dx, version " + progversion )
-        print( "DEBUG current working directory:" + os.path.realpath('.') )
+        self.statusbar.showMessage( "Welcome to Automator for Zorro and 2dx, version " + __version__ )
 
         
         
@@ -132,9 +127,17 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.actionSave_config.triggered.connect( functools.partial(self.saveConfig, None) )
         self.actionSet_paths.triggered.connect( self.FileLocDialog.show )
         self.actionCitations.triggered.connect( self.showCitationsDialog )
+        self.actionIMS_shortcuts.triggered.connect( self.showImsHelpDialog )
         
+        self.actionGroupPopout = QtGui.QActionGroup(self)
+        self.actionGroupPopout.addAction( self.actionPrefer2dx_viewer )
+        self.actionGroupPopout.addAction( self.actionPreferIms )
+        self.actionGroupPopout.addAction( self.actionPreferMplCanvas )
+        self.actionGroupPopout.triggered.connect( self.preferPopout )
         # Enable sorting for the file list
         self.listFiles.setSortingEnabled( True )
+        
+        
         
         # Paths
         self.ui_FileLocDialog.tbOpenInputPath.clicked.connect( functools.partial( 
@@ -152,8 +155,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.ui_FileLocDialog.tbOpenGainRefPath.clicked.connect( functools.partial( 
             self.openFileDialog, u'gainRef', True ) )    
 
-        #self.ui_FileLocDialog.comboOutputFormat.currentIndexChanged.connect( functools.partial( 
-        #    self.updateDict, self.paths, 'output_format', self.ui_FileLocDialog.comboOutputFormat.currentText ) )
+
         self.ui_FileLocDialog.leInputPath.editingFinished.connect( functools.partial( 
             self.updateDict, self.skulk.paths, u'input_dir', self.ui_FileLocDialog.leInputPath.text ) )
         self.ui_FileLocDialog.leOutputPath.editingFinished.connect( functools.partial( 
@@ -168,17 +170,22 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateDict, self.skulk.paths, u'fig_subdir', self.ui_FileLocDialog.leFiguresPath.text ) )    
         self.ui_FileLocDialog.leGainRefPath.editingFinished.connect( functools.partial( 
             self.updateDict, self.skulk.paths, u'gainRef', self.ui_FileLocDialog.leGainRefPath.text ) ) 
-        # Connect leGainRefPath twice, also to the zorroDefault object
-        self.ui_FileLocDialog.leGainRefPath.editingFinished.connect( functools.partial( 
-            self.updateZorroDefault, u'files.gainRef', self.ui_FileLocDialog.leGainRefPath.text ) )    
+        # Gainref has to be provided to the zorroDefault object later.   
             
+        # File output and compression
+        self.ui_FileLocDialog.comboCompressor.currentIndexChanged.connect( functools.partial( 
+            self.updateZorroDefault, u'files.compressor', self.ui_FileLocDialog.comboCompressor.currentText ) )
+#        self.ui_FileLocDialog.comboOutputFormat.currentIndexChanged.connect( functools.partial( 
+#            self.updateZorroDefault, u'files.ext', self.ui_FileLocDialog.comboOutputFormat.currentText ) )
+        self.ui_FileLocDialog.sbCLevel.valueChanged.connect( functools.partial( 
+            self.updateZorroDefault, u'files.cLevel', self.ui_FileLocDialog.sbCLevel.value ) )    
+        
         # Cache and Qsub paths
         self.tbOpenCachePath.clicked.connect( functools.partial( 
             self.openPathDialog, u'cachePath', True) )
         self.tbOpenQsubHeader.clicked.connect( functools.partial( 
             self.openFileDialog, u'qsubHeader', True) )
          
-
 
         # Common configuration
 #        self.comboRegistrator.currentIndexChanged.connect( functools.partial( 
@@ -199,20 +206,19 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateZorroDefault, u"autoMax", self.sbAutomax.value ) )    
         self.cbSuppressOrigin.stateChanged.connect( functools.partial( 
             self.updateZorroDefault, u"suppressOrigin", self.cbSuppressOrigin.isChecked ) )       
-        self.comboCompressionExt.currentIndexChanged.connect( functools.partial( 
-            self.updateZorroDefault, u"compress_ext", self.comboCompressionExt.currentText ) )    
         self.cbSavePNG.stateChanged.connect( functools.partial( 
             self.updateZorroDefault, u"savePNG", self.cbSavePNG.isChecked ) )
         self.comboFilterMode.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u"filterMode", self.comboFilterMode.currentText ) ) 
-        self.cbDoCompression.stateChanged.connect( functools.partial( 
-            self.updateZorroDefault, u"doCompression", self.cbDoCompression.isChecked ) )  
         self.cbSaveMovie.stateChanged.connect( functools.partial( 
             self.updateZorroDefault, u"saveMovie", self.cbSaveMovie.isChecked ) )  
         self.comboCtfProgram.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u"CTFProgram", self.comboCtfProgram.currentText ) )  
      
-
+        # DEBUG
+        self.cbSuppressOrigin.stateChanged.connect( functools.partial( 
+            self.skulk.setDEBUG, self.cbDebuggingOutput.isChecked ) )  
+            
         # Advanced configuration
         self.sbShapePadX.valueChanged.connect( functools.partial( 
             self.updateZorroDefault, u"shapePadded", (self.sbShapePadY.value,self.sbShapePadX.value) ) )
@@ -277,7 +283,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateDict, self.cfgCluster, u"qsubHeader", self.leQsubHeaderFile.text ) )   
         self.comboFFTWEffort.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault,  u"fftw_effort", self.comboFFTWEffort.currentText ) )    
-        self.listFiles.itemActivated.connect( self.checkSelectedFile  )
+        self.listFiles.itemActivated.connect( self.displaySelectedFile  )
         
         
         # All the Gauto's are line-edits so that we can have None or "" as the values
@@ -359,59 +365,69 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             viewWidg.autoParent = self
         
         # Try to load an ini file in the startup directory if it's present.
-        try: 
+        #try: 
             # iniList = glob.glob( os.path.join( origdir, '*.ini' ) )
-            iniList = glob.glob( u"*.ini" )
-            # Can't open a loadConfig dialog until the app has started, so only one .ini file can be in the directory.
-            if len( iniList ) == 1: # One .ini file
-                self.loadConfig( iniList[0] )
-            else:
-                print( "Loading default: %s" % os.path.join( os.path.realpath('.'), u'default.ini' ) )  
-                self.loadConfig( u'default.ini' )
-        except:
-            try:
-                self.loadConfig( u'default.ini' )
-            except:
-                print( "Using default Zorro parameters" )
+        iniList = glob.glob( u"*.ini" )
+        # Can't open a loadConfig dialog until the app has started, so only one .ini file can be in the directory.
+        if len( iniList ) == 1: # One .ini file
+            self.loadConfig( iniList[0] )
+        else:
+            defaultConfig = os.path.join( os.path.realpath(__file__), u'default.ini' )
+            if os.path.isfile( defaultConfig ):
+                print( "Loading default: %s" % defaultConfig  )  
+                self.loadConfig( defaultConfig )
+#        except:
+#            try:
+#                self.loadConfig( u'default.ini' )
+#            except:
+#                print( "Using default Zorro parameters" )
             
         # Check for auxiliary programs
         self.validateAuxTools()
+        # Setup preferred popout function
+        self.preferPopout()
         
-        self.skulk.inspectOutputDirectory() # Let's see if we can run this once...
+        self.skulk.inspectLogDir() # Let's see if we can run this once...
+        
         self.MainWindow.showMaximized()
         self.exec_()
         
         
     
     def validateAuxTools(self):
-        self.comboCompressionExt.setEnabled(True)
-        self.cbDoCompression.setEnabled(True)
+        #self.comboCompressionExt.setEnabled(True)
+        #self.cbDoCompression.setEnabled(True)
         self.pageGautoConfig.setEnabled(True)
         self.tbParticlePick.setEnabled(True)
         
         warningMessage = ""
         # Check for installation of lbzip2, pigz, and 7z
-        if not bool( zorro.util.which('lbzip2') ) and not bool( zorro.util.which('7z') ) and not bool( zorro.util.which('pigz') ):
-            warningMessage += u"Disabling compression: None of lbzip2, pigz, or 7z found.\n"
-            # TODO: limit compress_ext if only one is found?
-            self.comboCompressionExt.setEnabled(False)
-            self.cbDoCompression.setEnabled(False)
+        #if not bool( zorro.util.which('lbzip2') ) and not bool( zorro.util.which('7z') ) and not bool( zorro.util.which('pigz') ):
+        #    warningMessage += u"Disabling compression: None of lbzip2, pigz, or 7z found.\n"
+        #    # TODO: limit compress_ext if only one is found?
+        #    self.comboCompressionExt.setEnabled(False)
+        #    self.cbDoCompression.setEnabled(False)
 
         # Check for installation of CTFFIND/GCTF
         if not bool( zorro.util.which('ctffind') ):
             # Remove CTFFIND4 from options
-            warningMessage += u"Disabling CTFFIND4: not found.\n"
-            self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'CTFFIND4') )
-            self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'CTFFIND4, sum') )
+            warningMessage += u"Disabling CTFFIND4.1: not found.\n"
+            self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'CTFFIND4.1') )
+            self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'CTFFIND4.1, sum') )
         if not bool( zorro.util.which('gctf') ):
             warningMessage += u"Disabling GCTF: not found.\n"
             self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'GCTF') )
             self.comboCtfProgram.removeItem( self.comboCtfProgram.findText( 'GCTF, sum') )
         # Check for installation of Gautomatch
-        if not bool( zorro.util.which('Gautomatch') ):
+        if not bool( zorro.util.which('gautomatch') ):
             warningMessage += u"Disabling particle picking: Gautomatch not found.\n"
             self.pageGautoConfig.setEnabled(False)
             self.tbParticlePick.setEnabled(False)
+        if not bool( zorro.util.which('2dx_viewer') ):
+            warningMessage += u"2dx_viewer not found, using IMS for pop-out views.\n"
+            self.actionPrefer2dx_viewer.setEnabled( False )
+            self.actionPreferIms.setChecked(True)
+            
             
         if bool( warningMessage ):
             warnBox = QtGui.QMessageBox()
@@ -419,6 +435,35 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             warnBox.exec_()
             
             
+    def initClusterConfig(self):
+        # Setup default dicts so we have some values.
+        import numexprz as nz
+        def countPhysicalProcessors():
+            # This simply doesn't work on Windows with iCore5 for example.
+        
+            cpuInfo = nz.cpu.info
+            physicalIDs = []
+            for J, cpuDict in enumerate( cpuInfo ):
+                if not cpuDict['physical id'] in physicalIDs:
+                    physicalIDs.append( cpuDict['physical id'] )
+            return len( physicalIDs )
+
+        
+        try:
+            cpuCoresPerProcessor = np.int(nz.cpu.info[0]['cpu cores'])
+            self.cfgCluster = { u'n_threads':cpuCoresPerProcessor, 
+            u'n_processes':countPhysicalProcessors(), u'n_syncs':2, 
+            u'cluster_type': u'local', u'qsubHeader':u"" }
+        except:
+            print( "Failed to determine number of CPU cores, defaulting to number of virtual cores" )
+            # Use default values if the system can't figure things out for itself
+            self.cfgCluster = { u'n_threads': len(nz.cpu.info), u'n_processes':1, u'n_syncs':2, 
+                                   u'cluster_type': u'local', u'qsubHeader':u"" }
+
+        self.sbNProcesses.setValue( self.cfgCluster['n_processes'] )
+        self.sbNThreads.setValue( self.cfgCluster['n_threads'] )
+        self.sbNSyncs.setValue( self.cfgCluster['n_syncs'] )
+        
             
     def joinIconPaths(self):
         # Icon's aren't pathed properly if the CWD is somewhere else than the source folder, so...
@@ -442,7 +487,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.ui_FileLocDialog.tbOpenRawPath.setIcon(icon1)
         self.ui_FileLocDialog.tbOpenSumPath.setIcon(icon1)
         self.ui_FileLocDialog.tbOpenAlignPath.setIcon(icon1)
-        self.ui_FileLocDialog.tbOpenCWD.setIcon(icon1)
+        # self.ui_FileLocDialog.tbOpenCWD.setIcon(icon1)
         
         icon2 = QtGui.QIcon()
         icon2.addPixmap(QtGui.QPixmap(os.path.join( self.source_dir, "icons/go-next.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
@@ -460,7 +505,12 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         icon6.addPixmap(QtGui.QPixmap(os.path.join( self.source_dir, "icons/view-refresh.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.tbReprocess.setIcon(icon6)
         
-
+    def preferPopout( self ):
+        preferredText = self.actionGroupPopout.checkedAction().text()
+        for vw in self.viewWidgetList:
+            vw.popout = preferredText
+        pass
+    
     def runSkulk( self ):
         # Clean-up the file list
         for J in np.arange( self.listFiles.count(), -1, -1 ):
@@ -503,7 +553,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
 
     @QtCore.Slot()    
-    def updateFromSkulk( self, key, color ):
+    def updateFromSkulk( self, state_id, name, color ):
         """
         This is a message from the skulk manager that it's had a file change.  Remember that it's typed as 
         the signal is Qt, so if you change it in skulkManager you need to change the static declaration.
@@ -532,25 +582,82 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         u'tan', u'teal', u'thistle', u'tomato', u'transparent', u'turquoise', u'violet', u'wheat', u'white', 
         u'whitesmoke', u'yellow', u'yellowgreen']
         """
+        
+        # If we rename or delete the file, try to get it by state_id
+        # print( "Updating file %s with id %s to color/state %s" %(name,state_id,color) )
+        if color == 'rename':
+            print( "RENAME: (%s) %s " % (state_id, self.stateIds[state_id]) )
+            try:
+                oldName = self.stateIds.pop( state_id )
+                self.reverseIds.pop( oldName )
+            except KeyError:
+                raise KeyError( "Automator: Could not find state# %s in ID dict" % state_id )
+                return
+                
+            listItem = self.listFiles.findItems( oldName, QtCore.Qt.MatchFixedString )
 
-        # print( "DEBUG: Automator recevied status: %s for %s" %( str(color), str(key)) )
+            if len( listItem ) > 0:
+                listItem = listItem[0]
+                oldName = listItem.text()
+                # Maybe this isn't being updated or something?
+                listItem.setText( name )
+                # print( "DEBUG: Renamed item from %s to %s" %(oldName, listItem.text() ) )
+                
+            # We need to update our dicts
+            self.stateIds[state_id] = name
+            self.reverseIds[name] = state_id
+            # List should self sort
+            return
+        elif color == 'delete':
+            print( "DELETE: (%s) %s " % (state_id, self.stateIds[state_id]) )
+            try:
+                oldName = self.stateIds.pop( state_id )
+                self.reverseIds.pop( oldName )
+            except KeyError:
+                raise KeyError( "Automator: Could not find state# %s in ID dict" % state_id )
+                return
+                
+            listItem = self.listFiles.findItems( name, QtCore.Qt.MatchFixedString )
+            if len( listItem ) > 0:
+                listItem = listItem[0]
+                self.listFiles.takeItem( self.listFiles.row( listItem )  )
+            return
+        elif color == u'indigo':   # u'Finished'
+            self.statusbar.showMessage( "Finished processing: " + name )
+            
+        if name != None: 
+            # Update the id - key combination
+            self.stateIds[state_id] = name
+            self.reverseIds[name] = state_id
+        else:
+            # If name == None, we want to ID the key by its id number
+            name = self.stateIds[state_id]
+        
+
         # Check to see if the item exists already
-        listItem = self.listFiles.findItems( key, QtCore.Qt.MatchFixedString )
+        listItem = self.listFiles.findItems( name, QtCore.Qt.MatchFixedString )
 
         if len(listItem) == 0:
-            listItem = QtGui.QListWidgetItem( key )
+            # New id-key pair
+            listItem = QtGui.QListWidgetItem( name )
             self.listFiles.addItem( listItem )
         else:
             listItem = listItem[0]
             
-        if color == 'rename':
-            print( "RENAME: %s as listItem = %s from row %d" % (key, str(listItem), self.listFiles.row( listItem )) )
-            self.listFiles.takeItem( self.listFiles.row( listItem )  )
-        else:
-            listItem.setForeground( QtGui.QBrush( QtGui.QColor( u""+color ) ) )
-        pass
+        
+        # Can't compare QtGui.QListItem to None, so just use a try
+        try:
+            if color != None:
+                listItem.setForeground( QtGui.QBrush( QtGui.QColor( u""+color ) ) )
+                listItem.setToolTip( TOOLTIP_STATUS[color] )
+            else:
+                listItem.setForeground( QtGui.QBrush( QtGui.QColor( u"black" ) ) )
+                listItem.setToolTip( u"Unknown" )
+            pass
+        except:
+            pass
     
-        # Sort it?  
+        # Sort it?Should be automatic
 
         #  sizeFini = len( self.skulk.completeCounter )
         sizeTotal = len( self.skulk )
@@ -558,17 +665,21 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
         
         
-    def checkSelectedFile( self, item ):
+    def displaySelectedFile( self, item ):
         # Get the ZorroObj from the stack browser
-        key = item.text()
-        if key in self.skulk.keys():
-            print( "DEBUG %s :: %s" % ( key, self.skulk[key] ) )
-            self.updateAllViews( zorroObj = self.skulk[key].zorroObj )
+        name = item.text()
+        print( "Search for %s" % name + " in %s " % self.stateIds )
+        
+        reverseState = {v: k for k, v in self.stateIds.items()}
+        if name in reverseState:
+            print( "Trying to update name: " + str(name) + ", " + str(reverseState[name]) )
+            self.updateAllViews( zorroObj = self.skulk[reverseState[name]].zorroObj )
         
         
         
     def deleteSelected( self ):
         itemList = self.listFiles.selectedItems()
+        
         confirmBox = QtGui.QMessageBox()
         filenameString = ""
         for item in itemList:
@@ -579,33 +690,35 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         confirmBox.setDefaultButton( QtGui.QMessageBox.Cancel )
         confirmBox.exec_()
         if confirmBox.clickedButton() == deleteButton:
+            reverseState = {v: k for k, v in self.stateIds.items()}
             for item in itemList:
                 #item = self.listFiles.currentItem()
                 if item is None: 
                     continue
-
+                state_id = reverseState[item.text()]
                 # Delete everything
-                self.skulk.remove( item.text() )
-                self.listFiles.takeItem( self.listFiles.row(item) )
+                self.skulk.remove( state_id )
+                # The skulk will remove the item with a signal 
         
         
         
     def reprocessSelected( self ):
         # item = self.listFiles.currentItem()
         itemList = self.listFiles.selectedItems()
+        
+        reverseState = {v: k for k, v in self.stateIds.items()}
         for item in itemList:
             if item is None: continue
+        
+            self.skulk.reprocess( reverseState[item.text()] )
             
-            zorroObj = self.skulk[item.text()]
-            if zorroObj != None:
-                self.listFiles.takeItem( self.listFiles.row(item) )   
-                print( "REPROCESS: %s" % item.text() )
-                self.skulk.reprocess( item.text() )
-
+        if self.skulk.DEBUG:
+            print( "DEBUG: stateIds = " + str(self.stateIds) )
+            print( "DEBUG: reverseIds = " + str(self.reverseIds) )
 
 
     def particlePick( self ):
-        import Gautoauto
+        from . import Gautoauto
         
         itemList = self.listFiles.selectedItems()
         
@@ -616,7 +729,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             
             # Get the zorro obj and feed the imageSum or filtSum to execGautoMatch
             # Maybe it would be safer to load the zorroObj explicitely?
-            zorroState = self.skulk[item.text()]
+            zorroState = self.skulk[ self.reverseIds[ item.text() ] ]
             
             if 'filt' in zorroState.zorroObj.files:
                 sumName = zorroState.zorroObj.files['filt']
@@ -663,7 +776,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.cfgGplot['write_bg_mic'] = True
         self.cfgGauto['diameter'] = 260
         
-        print( "DEBUG: cfgGauto = " + str(self.cfgGauto) )
+        
         
         # Multiprocessed batch mode
         #Gautoauto.batchProcess( sumList, pngFronts, self.cfgGauto, self.cfgGplot, n_processes=self.sbGautoNProcesses.value() )
@@ -689,13 +802,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             viewWidg.updateZorroObj( zorroObj = zorroObj )
         pass
     
-
-    def updateFileList( self, filelist=None ):
-        print( "TODO: implement global update of all items in skulkManager" )
-    
     
     def binningControl( self, command, funcHandle, funcArg=None ):
-        # def updateDict( self, dictname, key, funchandle, funcarg = None ):
         # Basically this is just to all us to set shapeBinned = None in the case that the user doesn't want to 
         # do binning because that is the check inside Zorro
         
@@ -711,14 +819,13 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.zorroDefault.shapeBinned = [self.sbBinCropY.value(), self.sbBinCropX.value()]
             
     def updateDict( self, dictname, key, funchandle, funcarg = None ):
-        print( "updateDict: " + str(dictname) + " : " + str(key) + " : " + str(funchandle) + " : " + str(funcarg) )
 
         dictname[key] = funchandle()
-        print( str(dictname[key] ) )
-        if key == 'n_threads':
-            for hostName, hostObj in self.skulk.procHosts:
-                hostObj.n_threads = funchandle()
-            pass
+        # print( "updateDict: %s[ %s ] : %s " % (dictname, key, dictname[key] ) )
+        #if key == u'n_threads':
+        #    for hostName, hostObj in self.skulk.procHosts:
+        #        hostObj.n_threads = funchandle()
+        #    pass
         
         
     def updateZorroDefault( self, zorroAttrName, funcHandle, funcArg = None ):
@@ -764,7 +871,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             
         
     def loadConfig( self, cfgfilename ):
-        
+
         if cfgfilename is None:
             # open a dialog and ask user to pick a file
             cfgfilename = QtGui.QFileDialog.getOpenFileName( parent=self.MainWindow, caption="Load Initialization File", 
@@ -776,25 +883,45 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.cfgfilename = cfgfilename
         
         self.centralwidget.blockSignals(True)
-        self.statusbar.showMessage( "Loading config file: " + self.cfgfilename  )
+        self.statusbar.showMessage( "Loaded config file: " + self.cfgfilename  )
 
         config = configparser.RawConfigParser(allow_no_value = True)
         try:
             config.optionxform = unicode # Python 2
         except:
             config.optionxform = str # Python 3
+            
+
+        # Load all the zorro parameters into zorroDefault
+        self.zorroDefault.loadConfig( self.cfgfilename )
         
-        ##### Paths #####
+
+        
+        
+        
         config.read( self.cfgfilename )
-    
+        ##### Common configuration ####
+        try:
+            self.cfgCommon = json.loads( config.get( u'automator', u'common' ) )
+        except:
+            pass
+        
+        if u"version" in self.cfgCommon and __version__ > self.cfgCommon[u"version"]:
+            print( "WARNING: Automator (%s) is not backward compatible with %s, version %s" % 
+                (__version__, cfgfilename,self.cfgCommon[u"version"] ) )
+            return
+            
+        ##### Paths #####    
         try:
             # Cannot do straight assignment with this because it's not a dict 
             # and we have no constructor with a dict.
             norm_paths = json.loads( config.get(u'automator', u'paths' ) )
+            
             for key in norm_paths:
                 self.skulk.paths[key] = norm_paths[key]
         except:
             pass
+        
         
         try:
             self.ui_FileLocDialog.leInputPath.setText( self.skulk.paths.get_real(u'input_dir') )
@@ -802,9 +929,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         try:
             self.ui_FileLocDialog.leOutputPath.setText( self.skulk.paths.get_real(u'output_dir') )
         except: pass
-        try:
-            self.ui_FileLocDialog.leRawPath.setText( self.skulk.paths.get_real(u'cwd')  )
-        except: pass
+#        try:
+#            self.ui_FileLocDialog.leRawPath.setText( self.skulk.paths.get_real(u'cwd')  )
+#        except: pass
     
         try:
             self.ui_FileLocDialog.leRawPath.setText( self.skulk.paths.get_real(u'raw_subdir')  )
@@ -821,15 +948,22 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
                 viewWdgt.viewCanvas.param['figurePath'] = self.skulk.paths.paths[u'fig_subdir']
         except: pass
         try:
-            # TODO: I should remove the gainref from the path manager?  It's annoying to have it in two places.
-            self.skulk.paths[u'gainRef'] = self.zorroDefault.files['gainRef']
             self.ui_FileLocDialog.leGainRefPath.setText( self.skulk.paths.get_real(u'gainRef') )
         except: pass
-        #try:
-        #    self.paths['output_format'] = config.get('automator_paths','output_format')
-        #    self.ui_FileLocDialog.comboOutputFormat.setCurrentIndex( self.ui_FileLocDialog.comboOutputFormat.findText(self.paths['output_format']) )
-        #    self.skulk.paths['output_format'] = self.paths['output_format']
-        #except: pass
+        try: 
+            self.ui_FileLocDialog.comboCompressor.setCurrentIndex( 
+                self.ui_FileLocDialog.comboCompressor.findText( 
+                self.zorroDefault.files['compressor'] ) )
+        except: pass
+#        try: 
+#            self.ui_FileLocDialog.comboOutputFormat.setCurrentIndex( 
+#                self.ui_FileLocDialog.comboOutputFormat.findText( 
+#                self.zorroDefault.files['ext'].upper() ) )
+#        except: pass 
+        try: 
+            self.ui_FileLocDialog.sbCLevel.setValue( int(self.zorroDefault.files['cLevel']) )
+        except: pass
+    
 
         ##### views #####
         for viewWidg in self.viewWidgetList:
@@ -840,13 +974,11 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
         ###### Common configuration #####
 
-    
         ###### Cluster configuration #####
         try:
             self.cfgCluster = json.loads( config.get( u'automator', u'cluster' ) )
         except:
             pass
-        
         try:
 #            self.cfgCluster["cluster_type"] = config.get( 'automator_cluster', 'cluster_type' )
             self.comboClusterType.setCurrentIndex( self.comboClusterType.findText( self.cfgCluster[u"cluster_type"] ) )
@@ -877,8 +1009,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         ###### Gautomatch configuration #####
         
     
-        # Load all the zorro parameters into zorroDefault
-        self.zorroDefault.loadConfig( self.cfgfilename )
+
         # Update all the GUI elements
         
         try: self.comboTriMode.setCurrentIndex( self.comboTriMode.findText( self.zorroDefault.triMode ) )
@@ -900,10 +1031,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         try: self.comboFilterMode.setCurrentIndex( self.comboFilterMode.findText( self.zorroDefault.filterMode ) )
         except: print( "Unknown filter mode: " + str(self.zorroDefault.filterMode) )
     
-        try: self.comboCompressionExt.setCurrentIndex( self.comboCompressionExt.findText( self.zorroDefault.compress_ext ) )
-        except: self.comboCompressionExt.setCurrentIndex( self.comboCompressionExt.findText( "none" ) )
-        try: self.cbDoCompression.setChecked( self.zorroDefault.doCompression )
-        except: pass
+
         try: self.cbSavePNG.setChecked( self.zorroDefault.savePNG )
         except: pass
 
@@ -921,11 +1049,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         try: # This is easier then blocking all the signals...
             
             if np.any(self.zorroDefault.shapeBinned) == None:
-                print( "DEBUG: no binning" )
                 self.cbDoBinning.setChecked( False )
             else:
                 shapeBinned = np.copy( self.zorroDefault.shapeBinned )
-                print( "DEBUG: yes binning" )
                 self.sbBinCropX.setValue( shapeBinned[1] )
                 self.sbBinCropY.setValue( shapeBinned[0] )
                 self.cbDoBinning.setChecked( True )
@@ -972,27 +1098,21 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             pass
         
         try: 
-#            self.cfgGauto['boxsize'] = config.get( 'automator_gauto', 'boxsize' )
             self.leGautoBoxsize.setText( self.cfgGauto[u'boxsize'] )
         except: pass
         try: 
-#            self.cfgGauto['diameter'] = config.get( 'automator_gauto', 'diameter' )
             self.leGautoDiameter.setText( self.cfgGauto[u'diameter'] )
         except: pass
         try: 
-#            self.cfgGauto['min_dist'] = config.get( 'automator_gauto', 'min_dist' )
             self.leGautoMin_Dist.setText( self.cfgGauto[u'min_dist'] )
         except: pass
         try: 
-#            self.cfgGauto['T'] = config.get( 'automator_gauto', 'T' )
             self.leGautoTemplates.setText( self.cfgGauto[u'T'] )
         except: pass
         try: 
-#            self.cfgGauto['ang_step'] = config.get( 'automator_gauto', 'ang_step' )
             self.leGautoAng_Step.setText( self.cfgGauto[u'ang_step'] )
         except: pass
         try: 
-#            self.cfgGauto['speed'] = config.get( 'automator_gauto', 'speed' )
             self.leGautoSpeed.setText( self.cfgGauto[u'speed'] )
         except: pass
         try: 
@@ -1000,68 +1120,52 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.leGautoCCCutoff.setText( self.cfgGauto[u'cc_cutoff'] )
         except: pass
         try: 
-#            self.cfgGauto['lsigma_D'] = config.get( 'automator_gauto', 'lsigma_D' )
             self.leGautoLsigma_D.setText( self.cfgGauto[u'lsigma_D'] )
         except: pass
         try: 
-#            self.cfgGauto['lsigma_cutoff'] = config.get( 'automator_gauto', 'lsigma_cutoff' )
             self.leGautoLsigma_Cutoff.setText( self.cfgGauto[u'lsigma_cutoff'] )
         except: pass
         try: 
-#            self.cfgGauto['lave_D'] = config.get( 'automator_gauto', 'lave_D' )
             self.leGautoLave_D.setText( self.cfgGauto[u'lave_D'] )
         except: pass
         try: 
-#            self.cfgGauto['lave_min'] = config.get( 'automator_gauto', 'lave_min' )
             self.leGautoLave_Min.setText( self.cfgGauto[u'lave_min'] )
         except: pass
         try: 
-#            self.cfgGauto['lave_max'] = config.get( 'automator_gauto', 'lave_max' )
             self.leGautoLave_Max.setText( self.cfgGauto[u'lave_max'] )
         except: pass
         try: 
-#            self.cfgGauto['lp'] = config.get( 'automator_gauto', 'lp' )
             self.leGautoLP.setText( self.cfgGauto[u'lp'] )
         except: pass
         try: 
-#            self.cfgGauto['hp'] = config.get( 'automator_gauto', 'hp' )
             self.leGautoHP.setText( self.cfgGauto[u'hp'] )
         except: pass
         try: 
-#            self.cfgGauto['pre_lp'] = config.get( 'automator_gauto', 'pre_lp' )
             self.leGautoLPPre.setText( self.cfgGauto[u'pre_lp'] )
         except: pass
         try: 
-#            self.cfgGauto['pre_hp'] = config.get( 'automator_gauto', 'pre_hp' )
             self.leGautoHPPre.setText( self.cfgGauto[u'pre_hp'] )
         except: pass
         # Plotting for Gautomatch
         try: 
-#            self.cfgGplot['do_pre_filter'] = config.getboolean( 'automator_gplot', 'do_pre_filter' )
             self.cbGautoDoprefilter.setChecked( self.cfgGplot[u'do_pre_filter'] )
         except: pass
         try: 
-#            self.cfgGplot['write_ccmax_mic'] = config.getboolean( 'automator_gplot', 'write_ccmax_mic' )
             self.cbGautoPlotCCMax.setChecked( self.cfgGplot[u'write_ccmax_mic'] )
         except: pass
         try: 
-#            self.cfgGplot["write_pref_mic"] = config.getboolean( 'automator_gplot', "write_pref_mic" )
             self.cbGautoPlotPref.setChecked( self.cfgGplot[u"write_pref_mic"] )
         except: pass
         try: 
-#            self.cfgGplot["write_bg_mic"] = config.getboolean( 'automator_gplot', "write_bg_mic" )
             self.cbGautoPlotBG.setChecked( self.cfgGplot[u"write_bg_mic"] )
         except: pass
         try: 
-#            self.cfgGplot["write_bgfree_mic"] = config.getboolean( 'automator_gplot', "write_bgfree_mic" )
             self.cbGautoPlotBGFree.setChecked( self.cfgGplot[u"write_bgfree_mic"] )
         except: pass
         try: 
-#            self.cfgGplot["write_lsigma_mic"] = config.getboolean( 'automator_gplot', "write_lsigma_mic" )
             self.cbGautoPlotLsigmaFree.setChecked( self.cfgGplot[u"write_lsigma_mic"] )
         except: pass
         try: 
-#            self.cfgGplot["write_mic_mask"] = config.getboolean( 'automator_gplot', "write_mic_mask" )
             self.cbGautoPlotMaskFree.setChecked( self.cfgGplot[u"write_mic_mask"] )
         except: pass
     
@@ -1082,7 +1186,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.cfgfilename = cfgfilename
             
         self.statusbar.showMessage( "Saving configuration: " + cfgfilename )
-            
+        self.cfgCommon[u"version"] = __version__
+        
 #        # Overwrite the file if it already exists
         self.zorroDefault.saveConfig( cfgfilename )
         
@@ -1153,6 +1258,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.leGautoTemplates.setText( newFile )
         if name == u'gainRef':
             # self.zorroDefault.files['gainRef'] = newFile
+            print( "openFileDialog: Setting gainRef to %s" % newFile )
+            self.skulk.paths['gainRef'] = newFile
             self.ui_FileLocDialog.leGainRefPath.setText( newFile )
             
     def openPathDialog( self, pathname, openDialog ):
@@ -1175,8 +1282,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.skulk.paths[pathname] = newPath
         if pathname == u'input_dir':
             self.ui_FileLocDialog.leInputPath.setText( self.skulk.paths.get_real(pathname) )
-        if pathname == u'cwd':
-            self.ui_FileLocDialog.leCWD.setText( self.skulk.paths.get_real(pathname) )
+#        if pathname == u'cwd':
+#            self.ui_FileLocDialog.leCWD.setText( self.skulk.paths.get_real(pathname) )
         elif pathname == u'output_dir':
             self.ui_FileLocDialog.leOutputPath.setText( self.skulk.paths.get_real(pathname) )
         elif pathname == u'raw_subdir': 
@@ -1209,11 +1316,20 @@ Rohou, A., Grigorieff, N., 2015. CTFFIND4: Fast and accurate defocus estimation 
 
 GCTF:
 Zhang, K., 2016. Gctf: Real-time CTF determination and correction. Journal of Structural Biology 193, 1-12. doi:10.1016/j.jsb.2015.11.003
+
+SerialEM:
+Mastronarde, D.N. 2005. Automated electron microscope tomography using robust prediction of specimen movements. J. Struct. Biol. 152:36-51.
+
 """
         citBox = QtGui.QMessageBox()
-        # citBox.setTitle( "Automator Citations" )
         citBox.setText( citations )
         citBox.exec_()
+        
+    def showImsHelpDialog(self):
+        citBox = QtGui.QMessageBox()
+        citBox.setText( zorro.zorro_plotting.IMS_HELPTEXT )
+        citBox.exec_()
+        
     
 def main():
     try:

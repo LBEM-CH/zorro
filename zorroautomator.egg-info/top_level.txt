@@ -1,3 +1,0 @@
-automator
-numexprz
-zorro

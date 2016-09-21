@@ -27,6 +27,8 @@ Example usage:
     plt.plot( rln.star['data_fsc']['Resolution'], rln.star['data_fsc']['FourierShellCorrelationUnmaskedMaps'], '.-' )
     plt.xlabel( "Resolution" )
     plt.ylabel( "FSC" )
+    
+Note that all Relion strings are byte-strings (char1) rather than UTF encoded.
 
 """
 from __future__ import division, print_function, absolute_import
@@ -38,14 +40,7 @@ import os, os.path
 import glob
 import time
 import scipy
-
-try: # For Linux, use FreeSerif
-    plt.rc('font', family='FreeSerif', size=16)
-except:
-    try: 
-        plt.rc( 'font', family='serif', size=16)
-    except: pass
-
+from collections import OrderedDict
 
 # Static variable decorator
 def static_var(varname, value):
@@ -130,10 +125,10 @@ class ReliablePy(object):
         self.inputs = list( inputs )
         
         # _data.star file dicts
-        self.star = {}
+        self.star = OrderedDict()
         
         self.par = []
-        self.pcol = {}
+        self.pcol = OrderedDict()
 
         self.box = [] # Each box file loaded is indexed by its load order / dict could also be done if it's more convienent.
         
@@ -147,7 +142,7 @@ class ReliablePy(object):
     def load( self, *input_names ):
         # See if it's a single-string or list/tuple
 
-        if not isinstance( input_names, basestring ):
+        if not isinstance( input_names, str ):
             new_files = []
             for item in input_names:
                 new_files.extend( glob.glob( item ) )
@@ -207,15 +202,15 @@ class ReliablePy(object):
         'best' class 
         """
         
-        N_particles = np.sum( self.star['data_model_groups']['GroupNrParticles'] )
-        N_classes = self.star['data_model_general']['NrClasses']
+        N_particles = np.sum( self.star[b'data_model_groups'][b'GroupNrParticles'] )
+        N_classes = self.star[b'data_model_general'][b'NrClasses']
             
         plt.figure()
         for K in np.arange( N_classes ):
-            Resolution = self.star['data_model_class_%d'%(K+1)]['Resolution']
-            SSNR = self.star['data_model_class_%d'%(K+1)]['SsnrMap']
+            Resolution = self.star[b'data_model_class_%d'%(K+1)][b'Resolution']
+            SSNR = self.star[b'data_model_class_%d'%(K+1)][b'SsnrMap']
             plt.semilogy( Resolution, SSNR+1.0, 
-                     label="Class %d: %d" %(K+1,N_particles*self.star['data_model_classes']['ClassDistribution'][K]) )
+                     label="Class %d: %d" %(K+1,N_particles*self.star[b'data_model_classes'][b'ClassDistribution'][K]) )
         plt.legend( loc = 'best' )
         plt.xlabel( "Resolution ($\AA^{-1}$)" )
         plt.ylabel( "Spectral Signal-to-Noise Ratio" )
@@ -235,21 +230,21 @@ class ReliablePy(object):
         """
         if box == None:
             try: 
-                box = self.star['data_model_general']['OriginalImageSize']
+                box = self.star[b'data_model_general'][b'OriginalImageSize']
             except:
                 print( "No box shape found in metadata, load a *_model.star file or provide box dimension" )
                 return
             
-        partCount = len( self.star['data_']['CoordinateX'] )
+        partCount = len( self.star[b'data_'][b'CoordinateX'] )
         
         # Hmm... removing a row is a little painful because I index by keys in columnar format.
         box2 = box/2
-        CoordX = self.star['data_']['CoordinateX']
-        CoordY = self.star['data_']['CoordinateY']
+        CoordX = self.star[b'data_'][b'CoordinateX']
+        CoordY = self.star[b'data_'][b'CoordinateY']
         keepElements = ~((CoordX < box2)|(CoordY < box2)|(CoordX > shapeImage[1]-box2)|(CoordY > shapeImage[0]-box2))
-        for key, store in self.star['data_'].items():
-            self.star['data_'][key] = store[keepElements]
-        print( "Deleted %d"%(partCount-len(self.star['data_']['CoordinateX']) ) + 
+        for key, store in self.star[b'data_'].items():
+            self.star[b'data_'][key] = store[keepElements]
+        print( "Deleted %d"%(partCount-len(self.star[b'data_'][b'CoordinateX']) ) + 
                 " particles too close to image edge" )
         pass
     
@@ -328,17 +323,17 @@ class ReliablePy(object):
         import sklearn.cluster
         
         # We need to make an array for all particles that has the GroupScaleCorrection
-        P = len( self.star['data_']['DefocusU'] )
+        P = len( self.star[b'data_'][b'DefocusU'] )
         n_clusters = np.int( P / partPerGroup )
         
-        DefocusU = self.star['data_']['DefocusU']
-        DefocusV = self.star['data_']['DefocusV']
+        DefocusU = self.star[b'data_'][b'DefocusU']
+        DefocusV = self.star[b'data_'][b'DefocusV']
         DefocusMean = 0.5* (DefocusU + DefocusV)
-        part_GroupScaleCorrection = np.zeros_like( self.star['data_']['DefocusU'] )
+        part_GroupScaleCorrection = np.zeros_like( self.star[b'data_'][b'DefocusU'] )
         
         # Build a GroupScaleCorrection vector
-        for J, groupNr in enumerate( self.star['data_']['GroupNumber'] ):
-            part_GroupScaleCorrection[J] = self.star['data_model_groups']['GroupScaleCorrection'][  np.argwhere(self.star['data_model_groups']['GroupNumber'] == groupNr)[0] ]
+        for J, groupNr in enumerate( self.star[b'data_'][b'GroupNumber'] ):
+            part_GroupScaleCorrection[J] = self.star[b'data_model_groups'][b'GroupScaleCorrection'][  np.argwhere(self.star[b'data_model_groups'][b'GroupNumber'] == groupNr)[0] ]
         
         ##################
         # K-means clustering:
@@ -369,18 +364,18 @@ class ReliablePy(object):
         ##################
         # Replace, add one to group number because Relion starts counting from 1
 
-        particleKey = "data_"
+        particleKey = b"data_"
         
         # Add the GroupName field to the star file
-        self.star[particleKey]['GroupName'] = [""] * len( self.star[particleKey]['GroupNumber'] )
+        self.star[particleKey][b'GroupName'] = [""] * len( self.star[particleKey][b'GroupNumber'] )
         for J, groupName in enumerate( k_predict ):
-            self.star[particleKey]['GroupName'][J] = 'G' + str(groupName + 1)
+            self.star[particleKey][b'GroupName'][J] = b'G' + str(groupName + 1)
             
         # Build a new group number count
-        groupCount = np.zeros_like( self.star[particleKey]['GroupNumber'] )
+        groupCount = np.zeros_like( self.star[particleKey][b'GroupNumber'] )
         for J in np.arange(0,len(groupCount)):
-            groupCount[J] = np.sum( self.star[particleKey]['GroupNumber'] == J )
-        self.star[particleKey]['GroupNumber'] = groupCount
+            groupCount[J] = np.sum( self.star[particleKey][b'GroupNumber'] == J )
+        self.star[particleKey][b'GroupNumber'] = groupCount
             
         # Recalculate number of particles in each group (ACTUALLY THIS SEEMS NOT NECESSARY)
         #GroupNr = np.zeros( np.max( k_predict )+1 )
@@ -391,7 +386,7 @@ class ReliablePy(object):
         #for J in xrange(0, len(rln.star[particleKey]['GroupNumber']) ):
         #    rln.star[particleKey]['GroupNumber'][J] = GroupNr[ k_predict[J] ]
             
-    def saveDataStar( self, outputName, particleKey = "data_" ):
+    def saveDataStar( self, outputName, particleKey = b"data_" ):
         """
         Outputs a relion ..._data.star file that has been pruned, regrouped, etc. to outputName
         """
@@ -404,40 +399,26 @@ class ReliablePy(object):
         # TODO: more general star file output    
         # Let's just hack this
         fh = open( outputName, 'wb' )
-        fh.write( "\ndata_\n\nloop_\n")
+        fh.write( b"\ndata_\n\nloop_\n")
         
         # Since we made self.star an OrderedDict we don't need to keep track of index ordering
         
         headerKeys = self.star[particleKey].keys()
         
-#        headerDict = { 'Voltage':1, 'DefocusU':2, 'DefocusV':3, 'DefocusAngle':4, "SphericalAberration":5, "DetectorPixelSize":6,
-#                     "CtfFigureOfMerit":7, "Magnification":8, "AmplitudeContrast":9, "ImageName":10, "CoordinateX":11, 
-#                     "CoordinateY":12, "NormCorrection":13, "MicrographName":14, "GroupNumber":15, "OriginX":16, 
-#                     "OriginY":17, "AngleRot":18, "AngleTilt":19, "AnglePsi":20, "ClassNumber":21, "LogLikeliContribution": 22, 
-#                     "NrOfSignificantSamples":23, "MaxValueProbDistribution":24, "GroupName":25 }
-#        lookupDict = dict( zip( headerDict.values(), headerDict.keys() ) )             
-#        
-#        for J in lookupDict.keys():
-#            if not lookupDict[J] in self.star['data_']:
-#                lookupDict.pop( J )
-
-#        for J in np.sort(lookupDict.keys()):
-#            # print( "Column: " + "_rln" + lookupDict[J+1] + " #" + str(J+1) )
-#            fh.write( "_rln" + lookupDict[J] + " #" + str(J) + "\n")
 
         for J, key in enumerate(headerKeys):
             # print( "Column: " + "_rln" + lookupDict[J+1] + " #" + str(J+1) )
-            fh.write( "_rln" + key + " #" + str(J) + "\n")
+            fh.write( b"_rln" + key + " #" + str(J) + "\n")
 
         
         # lCnt = len( headerKeys ) 
-        P = len( self.star[particleKey]['ImageName'] )
+        P = len( self.star[particleKey][ self.star[particleKey].keys()[0] ] )
         for I in np.arange(0,P):
-            fh.write( "    ")
+            fh.write( b"    ")
             for J, key in enumerate(headerKeys):
                 fh.write( str( self.star[particleKey][key][I] ) )
-                fh.write( "   " )
-            fh.write( "\n" )
+                fh.write( b"   " )
+            fh.write( b"\n" )
         fh.close()
         
     def saveDataAsPar( self, outputName, particleKey = "data_" ):
@@ -454,47 +435,47 @@ class ReliablePy(object):
 
         
         
-        partCount = len( self.star['data_']['MicrographName'] )
+        partCount = len( self.star[b'data_'][b'MicrographName'] )
         # Need AnglePsi, AngleTilt, and AngleRot
-        if not 'AnglePsi' in self.star['data_']:
-            self.star['data_']['AnglePsi'] = np.zeros( partCount, dtype='float32' )
-        if not 'AngleTilt' in self.star['data_']:
-            self.star['data_']['AngleTilt'] = np.zeros( partCount, dtype='float32' )
-        if not 'AngleRot' in self.star['data_']:
-            self.star['data_']['AngleRot'] = np.zeros( partCount, dtype='float32' )
-        if not 'OriginY' in self.star['data_']:
-            self.star['data_']['OriginY'] = np.zeros( partCount, dtype='float32' )
-        if not 'OriginX' in self.star['data_']:
-            self.star['data_']['OriginX'] = np.zeros( partCount, dtype='float32' )
+        if not b'AnglePsi' in self.star[b'data_']:
+            self.star[b'data_'][b'AnglePsi'] = np.zeros( partCount, dtype='float32' )
+        if not b'AngleTilt' in self.star[b'data_']:
+            self.star['data_'][b'AngleTilt'] = np.zeros( partCount, dtype='float32' )
+        if not b'AngleRot' in self.star[b'data_']:
+            self.star[b'data_'][b'AngleRot'] = np.zeros( partCount, dtype='float32' )
+        if not 'OriginY' in self.star[b'data_']:
+            self.star[b'data_'][b'OriginY'] = np.zeros( partCount, dtype='float32' )
+        if not b'OriginX' in self.star[b'data_']:
+            self.star[b'data_'][b'OriginX'] = np.zeros( partCount, dtype='float32' )
         if not 'Magnification' in self.star['data_']:
-            self.star['data_']['Magnification'] = np.zeros( partCount, dtype='float32' )     
-        if not 'GroupNumber' in self.star['data_']:
-            self.star['data_']['GroupNumber'] = np.zeros( partCount, dtype='uint16' )    
-        if not 'DefocusU' in self.star['data_']:
-            self.star['data_']['DefocusU'] = np.zeros( partCount, dtype='float32' )
-        if not 'DefocusV' in self.star['data_']:
-            self.star['data_']['DefocusV'] = np.zeros( partCount, dtype='float32' )
-        if not 'DefocusAngle' in self.star['data_']:
-            self.star['data_']['DefocusAngle'] = np.zeros( partCount, dtype='float32' )    
+            self.star[b'data_'][b'Magnification'] = np.zeros( partCount, dtype='float32' )     
+        if not b'GroupNumber' in self.star[b'data_']:
+            self.star[b'data_'][b'GroupNumber'] = np.zeros( partCount, dtype='uint16' )    
+        if not b'DefocusU' in self.star[b'data_']:
+            self.star[b'data_'][b'DefocusU'] = np.zeros( partCount, dtype='float32' )
+        if not b'DefocusV' in self.star[b'data_']:
+            self.star[b'data_'][b'DefocusV'] = np.zeros( partCount, dtype='float32' )
+        if not b'DefocusAngle' in self.star[b'data_']:
+            self.star[b'data_'][b'DefocusAngle'] = np.zeros( partCount, dtype='float32' )    
             
         
         with open( outputName, 'wb' ) as fh:
             #fh.write( "       C      PSI    THETA      PHI      SHX      SHY      MAG     FILM      DF1      DF2   ANGAST\n" )
             for J in xrange(partCount):
-                fh.write( "%8d"%(J+1) + " %8.3f"%self.star['data_']['AnglePsi'][J] 
-                                + " %8.3f"%self.star['data_']['AngleTilt'][J]  + " %8.3f"%self.star['data_']['AngleRot'][J] 
-                                + " %8.3f"%self.star['data_']['OriginY'][J] +" %8.3f"%self.star['data_']['OriginX'][J]
-                                + " %8.2f"%self.star['data_']['Magnification'][J] 
-                                + " %8d"%self.star['data_']['GroupNumber'][J] + " %8.2f"%self.star['data_']['DefocusU'][J]
-                                + " %8.2f"%self.star['data_']['DefocusV'][J] + " %8.3f"%self.star['data_']['DefocusAngle'][J] + "\n")
+                fh.write( "%8d"%(J+1) + " %8.3f"%self.star[b'data_'][b'AnglePsi'][J] 
+                                + " %8.3f"%self.star[b'data_'][b'AngleTilt'][J]  + " %8.3f"%self.star[b'data_'][b'AngleRot'][J] 
+                                + " %8.3f"%self.star[b'data_'][b'OriginY'][J] +" %8.3f"%self.star[b'data_'][b'OriginX'][J]
+                                + " %8.2f"%self.star[b'data_'][b'Magnification'][J] 
+                                + " %8d"%self.star[b'data_'][b'GroupNumber'][J] + " %8.2f"%self.star[b'data_'][b'DefocusU'][J]
+                                + " %8.2f"%self.star[b'data_'][b'DefocusV'][J] + " %8.3f"%self.star[b'data_'][b'DefocusAngle'][J] + "\n")
                 pass
         
         # Ok and now we need to make a giant particles file?
         mrcName, _= os.path.splitext( outputName ) 
         mrcName = mrcName + ".mrc"
         
-        imageNames = np.zeros_like( self.star['data_']['ImageName'] )
-        for J, name in enumerate( self.star['data_']['ImageName'] ):
+        imageNames = np.zeros_like( self.star[b'data_'][b'ImageName'] )
+        for J, name in enumerate( self.star[b'data_'][b'ImageName'] ):
             imageNames[J] = name.split('@')[1]
         uniqueNames = np.unique( imageNames ) # Ordering is preserved, thankfully!
         
@@ -525,11 +506,11 @@ class ReliablePy(object):
         """
         zorroList = glob.glob( zorroList )
 
-        headerDict = { 'MicrographName':1, 'CtfImage':2, 'DefocusU':3, 'DefocusV':4, 'DefocusAngle':5, 
-                      'Voltage':6, 'SphericalAberration':7, 'AmplitudeContrast':8, 'Magnification':9, 
-                      'DetectorPixelSize':10, 'CtfFigureOfMerit': 11 }
+        headerDict = { b'MicrographName':1, b'CtfImage':2, b'DefocusU':3, b'DefocusV':4, b'DefocusAngle':5, 
+                      b'Voltage':6, b'SphericalAberration':7, b'AmplitudeContrast':8, b'Magnification':9, 
+                      b'DetectorPixelSize':10, b'CtfFigureOfMerit': 11 }
         lookupDict = dict( zip( headerDict.values(), headerDict.keys() ) )   
-        data = {}
+        data = OrderedDict()
         for header in headerDict:      
             data[header] = [None]*len(zorroList)
             
@@ -537,44 +518,123 @@ class ReliablePy(object):
         for J, zorroLog in enumerate(zorroList):
             zorroReg.loadConfig( zorroLog, loadData=False )
             
-            data['MicrographName'][J] = zorroReg.files['sum']
-            data['CtfImage'][J] = os.path.splitext( zorroReg.files['sum'] )[0] + ".ctf:mrc"
+            data[b'MicrographName'][J] = zorroReg.files['sum']
+            data[b'CtfImage'][J] = os.path.splitext( zorroReg.files['sum'] )[0] + ".ctf:mrc"
             # CTF4Results = [Micrograph number, DF1, DF2, Azimuth, Additional Phase shift, CC, max spacing fit-to]
-            data['DefocusU'][J] = zorroReg.CTF4Results[1]
-            data['DefocusV'][J] = zorroReg.CTF4Results[2]
-            data['DefocusAngle'][J] = zorroReg.CTF4Results[3]
-            data['CtfFigureOfMerit'][J] = zorroReg.CTF4Results[5]
-            data['Voltage'][J] = zorroReg.voltage
-            data['SphericalAberration'][J] = zorroReg.C3
-            data['AmplitudeContrast'][J] = amplitudeContrast
-            data['DetectorPixelSize'][J] = physicalPixelSize
-            data['Magnification'][J] = physicalPixelSize / (zorroReg.pixelsize * 1E-3)
+            data[b'DefocusU'][J] = zorroReg.CTF4Results[1]
+            data[b'DefocusV'][J] = zorroReg.CTF4Results[2]
+            data[b'DefocusAngle'][J] = zorroReg.CTF4Results[3]
+            data[b'CtfFigureOfMerit'][J] = zorroReg.CTF4Results[5]
+            data[b'Voltage'][J] = zorroReg.voltage
+            data[b'SphericalAberration'][J] = zorroReg.C3
+            data[b'AmplitudeContrast'][J] = amplitudeContrast
+            data[b'DetectorPixelSize'][J] = physicalPixelSize
+            data[b'Magnification'][J] = physicalPixelSize / (zorroReg.pixelsize * 1E-3)
             
         with open( outputName, 'wb' ) as fh:
 
-            fh.write( "\ndata_\n\nloop_\n")
+            fh.write( b"\ndata_\n\nloop_\n")
             for J in np.sort(lookupDict.keys()):
                 # print( "Column: " + "_rln" + lookupDict[J+1] + " #" + str(J+1) )
-                fh.write( "_rln" + lookupDict[J] + " #" + str(J) + "\n")
+                fh.write( b"_rln" + lookupDict[J] + b" #" + str(J) + b"\n")
             
             lCnt = len( lookupDict ) 
             for I in np.arange(0,len(zorroList)):
-                fh.write( "    ")
+                fh.write( b"    ")
                 for J in np.arange(0,lCnt):
                     fh.write( str( data[lookupDict[J+1]][I] )  )
-                    fh.write( "   " )
-                fh.write( "\n" )
+                    fh.write( b"   " )
+                fh.write( b"\n" )
             
+    def gctfHistogramFilter( self, defocusThreshold = 40000, astigThreshold = 800, 
+                            fomThreshold = 0.0, resThreshold = 6.0, 
+                            starName = "micrographs_all_gctf.star", outName = "micrographs_pruned_gctf.star" ):
+        """
+        gctfHistogramFilter( self, defocusThreshold = 40000, astigThreshold = 800, 
+                            fomThreshold = 0.0, resThreshold = 6.0, 
+                            starName = "micrographs_all_gctf.star", outName = "micrographs_pruned_gctf.star" )
+                            
+        Calculates histograms of defocus, astigmatism, figure-of-merit (Pearson correlation coefficient),
+        and resolution limit, and applies the thresholds as specified in the keyword arguments.  
+        Plots are generated showing the threshold level.  
+        
+        The output star file `outName` rejects all micrographs that fail any of the thresholds.
+        """
+        self.load( starName )
+        
+        defocusU = self.star['data_']['DefocusU']
+        defocusV = self.star['data_']['DefocusV']
+        finalResolution = self.star['data_']['FinalResolution']
+        ctfFoM = self.star['data_']['CtfFigureOfMerit']
+        
+        defocusMean = 0.5 * defocusU + 0.5 * defocusV
+        astig = np.abs( defocusU - defocusV )
+        
+        [hDefocus, cDefocus] = np.histogram( defocusMean,  
+            bins=np.arange(np.min(defocusMean),np.max(defocusMean),500.0) )
+        hDefocus = hDefocus.astype('float32')
+        cDefocus = cDefocus[:-1] +500.0/2
+        
+        [hAstig, cAstig] = np.histogram( astig, 
+            bins=np.arange(0, np.max(astig), 500.0) )
+        hAstig = hAstig.astype('float32')
+        cAstig = cAstig[:-1] +500.0/2
+        
+        [hFoM, cFoM] = np.histogram( ctfFoM,  
+            bins=np.arange(0.0,np.max(ctfFoM),0.002) )
+        hFoM = hFoM.astype('float32')
+        cFoM = cFoM[:-1] +0.002/2.0
+        
+        [hRes, cRes] = np.histogram( finalResolution,  
+            bins=np.arange(np.min(finalResolution),np.max(finalResolution),0.20) )
+        hRes = hRes.astype('float32')
+        cRes = cRes[:-1] +0.20/2.0
+        
+        plt.figure()
+        plt.fill_between( cDefocus, hDefocus, np.zeros(len(hDefocus)), facecolor='steelblue', alpha=0.5 )
+        plt.plot( [defocusThreshold, defocusThreshold], [0, np.max(hDefocus)], "--", color='firebrick' )
+        plt.xlabel( "Defocus, $C_1 (\AA)$" )
+        plt.ylabel( "Histogram counts" )
+        
+        plt.figure()
+        plt.fill_between( cAstig, hAstig, np.zeros(len(hAstig)), facecolor='forestgreen', alpha=0.5 )
+        plt.plot( [astigThreshold, astigThreshold], [0, np.max(hAstig)], "--", color='firebrick' )
+        plt.xlabel( "Astigmatism, $A_1 (\AA)$" )
+        plt.ylabel( "Histogram counts" )
+        
+        plt.figure()
+        plt.fill_between( cFoM, hFoM, np.zeros(len(hFoM)), facecolor='darkorange', alpha=0.5 )
+        plt.plot( [fomThreshold, fomThreshold], [0, np.max(hFoM)], "--", color='firebrick' )
+        plt.xlabel( "Figure of Merit, $R^2$" )
+        plt.ylabel( "Histogram counts" )
+        
+        plt.figure()
+        plt.fill_between( cRes, hRes, np.zeros(len(hRes)), facecolor='purple', alpha=0.5 )
+        plt.plot( [resThreshold, resThreshold], [0, np.max(hRes)], "--", color='firebrick' )
+        plt.xlabel( "Fitted Resolution, $r (\AA)$" )
+        plt.ylabel( "Histogram counts" )
+        
+        
+        #keepIndices = np.ones( len(defocusU), dtype='bool' )
+        keepIndices = ( ( defocusMean < defocusThreshold) & (astig < astigThreshold) &
+                        (ctfFoM > fomThreshold ) & (finalResolution < resThreshold) )
+        
+        print( "KEEPING %d of %d micrographs" %(np.sum(keepIndices), defocusU.size) )
+        
+        for key in self.star['data_']:
+            self.star['data_'][key] =  self.star['data_'][key][keepIndices]
+            
+        self.saveDataStar( outName )
         
     def __loadPar( self, parname ):
         """
         Frealign files normally have 16 columns, with any number of comment lines that start with 'C'
         """
-        self.par.append( np.loadtxt( parname, comments='C' ) )
+        self.par.append( np.loadtxt( parname, comments=b'C' ) )
         # TODO: split into a dictionary?  
         # TODO: read comments as well
-        self.pcol = {"N":0, "PSI":1, "THETA":2, "PHI":3, "SHX":4, "SHY":5, "MAG":6, "FILM":7, "DF1":8, "DF2":9, "ANGAST":10,
-                        "OCC":11, "LogP":12, "SIGMA":13, "SCORE":14, "CHANGE":15 }
+        self.pcol = {b"N":0, b"PSI":1, b"THETA":2, b"PHI":3, b"SHX":4, b"SHY":5, b"MAG":6, b"FILM":7, b"DF1":8, b"DF2":9, 
+                     b"ANGAST":10, b"OCC":11, b"LogP":12, b"SIGMA":13, b"SCORE":14, b"CHANGE":15 }
                
     def __loadStar( self, starname ):
         with open( starname, 'rb' ) as starFile:
@@ -588,7 +648,7 @@ class ReliablePy(object):
             # Top-level keys all start with data_
             headerTags = []; headerIndices = []
             for J, line in enumerate(starLines):
-                if line.startswith( "data_" ): # New headerTag
+                if line.startswith( b"data_" ): # New headerTag
                     headerTags.append( line.strip() )
                     headerIndices.append( J )
             # for end-of-file
@@ -596,7 +656,7 @@ class ReliablePy(object):
             
             # Build dict keys
             for K, tag in enumerate( headerTags ):
-                self.star[tag] = {}
+                self.star[tag] = OrderedDict()
                 # Read in _rln lines and assign them as dict keys
                 
                 lastHeaderIndex = 0
@@ -608,15 +668,20 @@ class ReliablePy(object):
                     slicedLines = starLines[headerIndices[K]:headerIndices[K+1]] 
                     
                 for J, line in enumerate( slicedLines ):
-                    if line.startswith( "loop_" ):
+                    if line.startswith( b"loop_" ):
                         foundLoop = True
-                    elif line.startswith( "_rln" ):
+                    elif line.startswith( b"_rln" ):
                         lastHeaderIndex = J
                         # Find all the keys that start with _rln, they are sub-dict keys
                         newKey = line.split()[0][4:]
-                        newValue = line.split()[1]
-                        # If newValue starts with a #, strip it
-                        newValue = newValue.lstrip( '#' )
+                        try:
+                            newValue = line.split()[1]
+                            # If newValue starts with a #, strip it
+                            newValue = newValue.lstrip( b'#' )
+                        except:
+                            # Some really old Relion star files don't have the column numbers, so assume it's ordered
+                            newValue = J
+                            
                         # Try to make newValue an int or float, or leave it as a string if that fails
                         try:
                             self.star[tag][newKey] = np.int( newValue )
@@ -629,13 +694,14 @@ class ReliablePy(object):
                 # Now run again starting at lastHeaderIndex
                 if foundLoop: 
                     # Need to check to make sure it's not an empty dict
-                    if self.star[tag] == {}:
+                    if self.star[tag] == OrderedDict():
                         continue
                     
                     endIndex = len(slicedLines)
                         
                     # Reverse sub-dictionary so we can determine by which column goes to which key
                     lookup = dict( zip( self.star[tag].values(), self.star[tag].keys() ) )
+                    print( "DEBUG: lookup = %s" % lookup )
                     # Pre-allocate, we can determine types later.   
                     itemCount = endIndex - lastHeaderIndex - 1
                     testSplit = slicedLines[lastHeaderIndex+1].split()

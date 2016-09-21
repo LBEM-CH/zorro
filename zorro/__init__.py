@@ -19,12 +19,11 @@ from . import zorro_util as util
 from . import zorro_plotting as plot
 
 import os.path
-#import numexprz as ne
-#import numpy as np
+
+from .__version__ import __version__
 
 from . import ReliablePy
 from . import extract
-
 
 # Call Zorro as a blocking subprocess call on a provided config/log file.
 def call( configName ):
@@ -37,6 +36,4 @@ def call( configName ):
 #if os.path.isfile( __workingScript ):
 #    print( "Zorro directory processing script may be found in : " + __workingScript )
 
-
-__version__ = "0.5.0dev"
 
