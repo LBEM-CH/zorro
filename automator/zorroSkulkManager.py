@@ -102,6 +102,8 @@ class zorroState(object):
         self.__priority = -1.0
         self.__state = NEW
         self.__name = name
+        self.__wait = -1.0 # SerialEM is quite slow to write files so we need a more conservative wait time
+        self.waitTime = 5.0
         self.zorroObj = copy.deepcopy( zorroDefault )
         self.__prior_mtime = None
         self.__prior_size = None
@@ -122,6 +124,7 @@ class zorroState(object):
     
         self.zorroObj.loadConfig( logName )
         self.__state = REVERSE_STATE_NAMES[ self.zorroObj.METAstatus ]
+        self.decrementState()
         self.__name = self.zorroObj.files[u'config']
         self.stackPriority()
 
@@ -135,19 +138,27 @@ class zorroState(object):
         # TODO: should the state machine be an iterator?  Is that feasible?
         if self.__state == PROCESSING:
             self.__state = READY
+            self.messageQueue.put( [self.__state, self] )
         elif self.__state == SYNCING:
             self.__state = STABLE
+            self.messageQueue.put( [self.__state, self] )
         elif self.__state == ARCHIVING:
             self.__state = FINISHED
+            self.messageQueue.put( [self.__state, self] )
             
     def incrementState(self):
         # Increment the state if it was in a process that successfully finished
         if self.__state == PROCESSING:
             self.__state = FINISHED
+            self.messageQueue.put( [self.__state, self] )
         elif self.__state == SYNCING:
             self.__state = READY
+            # We have to both rename ourselves and ask to be put into the procHeap here
+            self.renameToZor()
+            self.messageQueue.put( [self.__state, self] )
         elif self.__state == ARCHIVING:
             self.__state = COMPLETE
+            self.messageQueue.put( [self.__state, self] )
             
             
     def updateConfig( self, zorroMerge ):
@@ -175,7 +186,7 @@ class zorroState(object):
         #print( "OUTPUT PATH: " + self.paths['output_dir' ] )
         #print( "CONFIG FILE: " + self.zorroObj.files['config'] )
         
-        if self.zorroObj.files['compressor'] == None:
+        if not bool(self.zorroObj.files['compressor']):
             mrcExt = ".mrc"
             mrcsExt = ".mrcs"
         else:
@@ -192,6 +203,15 @@ class zorroState(object):
 #        if bool( self.paths[u'gainRef'] ):
 #            # Gainref functionality is not required, so it may be none
 #            self.zorroObj.files[u'gainRef'] = os.path.join( self.paths[u'output_dir'], self.paths[u'gainRef'] )
+        
+    def renameToZor(self):
+        """
+        Rename the state from a raw .mrc/.dm4 to a config .zor, after a SYNCING operation
+        """
+        newName = self.zorroObj.files[u'config']
+        self.__name = newName
+        self.__state = READY
+        self.messageQueue.put( [RENAME, self] )
         
     def peek(self):
         # Take a peek at the log on the disk for the STATE, used for loading existing logs from disk.
@@ -219,6 +239,7 @@ class zorroState(object):
     def topPriority(self):
         self.stackPriority( multiplier = 1E6 )
         
+        
     def update(self):
         # Check the state and if it needs to be changed.  I could make these functions but pratically if I 
         # just lay-out the code nicely it's the same thing.
@@ -242,6 +263,10 @@ class zorroState(object):
                 self.messageQueue.put( [self.__state, self] )
                 return
                 
+            # TODO: serialEM is really slow at writing files, so this needs to be 
+            # even more conservative.
+                
+                
             # Else: raw file
             # Check if file changed since last cycle
             newSize = os.path.getsize( self.__name )
@@ -250,10 +275,15 @@ class zorroState(object):
             if (newMTime == self.__prior_mtime and 
                         newSize == self.__prior_size and 
                         newSize >= self.__MIN_FILE_SIZE ):
-                self.__state = STABLE
-                self.messageQueue.put( [self.__state, self] )
+                # Additional conservative wait for SerialEM writing
+                if self.__wait < 0.0:
+                    self.__wait = time.time()
+                elif self.__wait + self.waitTime < time.time():
+                    self.__state = STABLE
+                    self.messageQueue.put( [self.__state, self] )
                 # self.update() # goto next state immediately
             else: # Else Still  changing
+                self.__wait = -1.0
                 pass
             
             self.__prior_mtime = os.path.getmtime( self.__name )
@@ -277,18 +307,14 @@ class zorroState(object):
                     # print( "DEBUG: try to rename %s to %s" % (oldName, self.zorroObj.files[u'stack']) )
                     os.rename( oldName, self.zorroObj.files[u'stack'] )
                     
-                    self.__name = newName
-                    self.__state = READY
-                    
-                    # Tell manager we renamed self
-                    self.messageQueue.put( [RENAME, self] )
+                    self.renameToZor()
                 except:
                     raise
                     
             else: # Submit self to the copy heap
                 self.__state = SYNCING
                 self.messageQueue.put( [SYNCING, self] )
-                 # TODO: manager needs to handle renaming in this case.
+                # TODO: manager needs to handle renaming in this case.
     
         ### READY ###
         elif self.__state == READY:
@@ -887,6 +913,7 @@ class skulkPaths(collections.MutableMapping):
 
 
 #################### SKULKHOST CLASS ###############################
+#class skulkHost(QtCore.QThread):
 class skulkHost(object):
     """
     A skulkHost manages the individual Zorro jobs dispatched by Automator.  On a local machine, one skulkHost 
@@ -911,6 +938,10 @@ class skulkHost(object):
         
         qsubHeader is a text file that contains everything but the qsub line for a .bash script.
         """
+        # In case I need to re-factor to have a seperate thread for each host
+        #QtCore.QThread.__init__(self)
+        # self.sleepTime = 1.0
+        
         self.hostName = hostname
         self.messageQueue = messageQueue
         self.zorroState = None
@@ -936,11 +967,13 @@ class skulkHost(object):
         self.cachePath = cachepath
         self.qsubHeaderFile = qsubHeader
         
-#    def kill(proc_pid):
-#    process = psutil.Process(proc_pid)
-#    for proc in process.get_children(recursive=True):
-#        proc.kill()
-#    process.kill()
+        
+
+    def __clean__(self):
+        self.subprocess = None
+        self.zorroState = None
+        try: os.remove( self.submitName )
+        except: pass
     
     def kill(self):
 
@@ -970,38 +1003,62 @@ class skulkHost(object):
         if self.workerFunction == self.submitQsubJob:
             print( "Warning: User must call qdel on the submitted job. We need to id the job number during submission" )
             
-        # Open the host for new jobs (hopefully zombie processes cannot pile up)
-        self.subprocess = None       
+        # Open the host for new jobs
+        self.__clean__()     
+        
+
          
     def poll(self):
         # Would it be better to have some sort of event driven implementation?
-        if self.subprocess == None or not bool( self.zorroState ):
+        if self.subprocess == None and self.zorroState != None:
+            # BUG: sometimes this skips...
+            # Can we assume it finished?  What if it's an error?  Can we peak at the log?
+            priorState = self.zorroState.state
+            try:
+                diskState= self.zorroState.peek()
+                # Is this stable over all states?
+                if priorState == SYNCING:
+                    self.messageQueue.put( [RENAME, self.zorroState] )
+                self.messageQueue.put( [diskState, self.zorroState] )
+            except:                 
+                print( "DEBUG: skulkHost.poll couldn't peak at log %s" % self.zorroState.zorroObj.files['config'] )
+            
+            
+            
+            self.__clean__()
+            
+            # Remove the submission script if present
+            
+            return HOST_FREE
+        elif self.zorroState == None:
             return HOST_FREE
             
+        # Else: we have a subprocess and a zorroState
         status = self.subprocess.poll()
         if status == None:
             return HOST_BUSY
         elif status == 0:
 
             # Send a message that we finished a process and that the state should be incremented.
-            if self.zorroState.state == PROCESSING:
-                self.messageQueue.put( [FINISHED, self.zorroState] )
-            elif self.zorroState.state == SYNCING:
-                self.messageQueue.put( [RENAME, self.zorroState] )
-            elif self.zorroState.state == ARCHIVING:
-                self.messageQueue.put( [COMPLETE, self.zorroState] )
-            else:
-                if self.zorroState.state in STATE_NAMES:
-                    raise ValueError( "skulkHost: unknown job type: " + str(STATE_NAMES[self.zorroState.state]) )
-                else:
-                    raise ValueError( "skulkHost: unknown job type: " + str(self.zorroState.state) )
+            self.zorroState.incrementState()
+            self.messageQueue.put( [self.zorroState.state, self.zorroState] )
+            
+
+            #if self.zorroState.state == PROCESSING:
+            #    self.messageQueue.put( [FINISHED, self.zorroState] )
+            #elif self.zorroState.state == SYNCING:
+            #    self.messageQueue.put( [RENAME, self.zorroState] )
+            #elif self.zorroState.state == ARCHIVING:
+            #    self.messageQueue.put( [COMPLETE, self.zorroState] )
+            #else:
+            #    if self.zorroState.state in STATE_NAMES:
+            #        raise ValueError( "skulkHost: unknown job type: " + str(STATE_NAMES[self.zorroState.state]) )
+            #    else:
+            #        raise ValueError( "skulkHost: unknown job type: " + str(self.zorroState.state) )
                 
             # Release the subprocess and state object
-            self.subprocess = None
-            self.zorroState = None
-            # Remove the submission script if present
-            try: os.remove( self.submitName )
-            except: pass
+            self.__clean__()
+            
             return HOST_FREE
         else: # Error state, kill it with fire
             self.kill()
@@ -1330,29 +1387,32 @@ class skulkManager(QtCore.QThread):
             # Just update the status color in Automator
             pass
         elif message == RENAME:
-            # The assumption here is that the key has changed, so we have to pop the oldKey 
+            # The assumption here is that the name has changed, but the ID has 
+            # not changed.
             # and add the new one from the globalHeap
-            oldKeyId = zorroState.id
 
-            # oldKey = zorroState.zorroObj.files['original']
-            # print( "Rename %s to %s " %( oldKey, zorroState.key ) )
-            try: 
-                self.__clean__( oldKeyId )
-            except: pass 
-            
-            # Notify Automator of the deletion
+            # Notify Automator of the new name
             self.automatorUpdate( zorroState.id, zorroState.name, 'rename' )
             
-            print( "Renamed %s" % zorroState.name )
+            if self.DEBUG:
+                print( "DEBUG: Renamed %s" % zorroState.name )
             
-            # We assume after a rename the zorroState isn't in the heap
+            # Remove the file from the sync heap if necessary
+            try: 
+                self.__syncHeap.pop( zorroState.id )
+            except: pass
+        
+            # Update the pointer in the global heap.
             self.__globalHeap[zorroState.id] = zorroState  
             
             
-            zorroState.incrementState() # WARNING: not always the case!
             message = READY # WARNING: not always the case!
             
         elif message == READY:
+            # We can take it out of the new file heap at this stage.
+            try: self.__newHeap.pop( zorroState.id )
+            except: pass
+        
             return
         elif message == STABLE:
             return
@@ -1407,10 +1467,12 @@ class skulkManager(QtCore.QThread):
                 # We aren't really using archiving anymore, the blosc compression is so much faster
                 pass
             
-            zorroState.incrementState()
         elif message == HOST_ERROR or message == ERROR:
             # Remove from all the heaps except the global heap.
-            self.__clean__( zorroState.id )
+            try:
+                self.__clean__( zorroState.id )
+            except: pass
+            return
         else:
             print( "skulkManager::mainPollingLoop: Unknown message : " + STATE_NAMES[message] )
             pass
@@ -1435,8 +1497,9 @@ class skulkManager(QtCore.QThread):
             # Ouch here we have a problem with the switch to id/name
             if "CountRef" in globbedFile:
                 # Maybe this could be a statusbar thing instead?
-                
                 # print( "Skipping SerialEM reference image %s" % globbedFile )
+                continue
+            if "SuperRef" in globbedFile:
                 continue
             
             if not self.__newHeap.getByName( globbedFile ):
@@ -1468,11 +1531,13 @@ class skulkManager(QtCore.QThread):
         self.archiveHosts = {} 
         
         print( "Starting %d processing hosts" % n_processes )
+        self.procHosts = {}
         for J in np.arange( n_processes ):
             self.procHosts['host%d'%J] = skulkHost( 'host%d'%J, cluster_type, self.messageQueue, 
                     n_threads=n_threads, qsubHeader=qsubHeader )
         
-        print( "Starting %d syncing hosts" % n_syncs )            
+        print( "Starting %d syncing hosts" % n_syncs )
+        self.syncHosts = {}
         for J in np.arange( n_syncs ):
             self.syncHosts['sync%d'%J] = skulkHost( 'sync%d'%J, 'rsync', self.messageQueue )
         pass # end iniHosts()
@@ -1488,7 +1553,9 @@ class skulkManager(QtCore.QThread):
     def __clean__( self, state_id ):
         """
         """
-        print( "Clean: " + str(state_id) )
+        if self.DEBUG:
+            print( "Clean: " + str(state_id) )
+            
         try:
             deleteZorro = self.__globalHeap.pop( state_id )
             if deleteZorro != None:
@@ -1501,6 +1568,9 @@ class skulkManager(QtCore.QThread):
                 except: pass
                 try: 
                     self.__archiveHeap.pop( state_id )
+                except: pass
+                try: 
+                    self.__newHeap.pop( state_id )
                 except: pass
             
             # print( "zorroSkulkManager: removed from Heap (%s): %s" % (state_id, deleteZorro.name)  )
@@ -1532,6 +1602,10 @@ class skulkManager(QtCore.QThread):
                 deleteZorro.zorroObj.loadConfig()
                 print( "Loaded: " + deleteZorro.zorroObj.files['config'] )
                 
+                # Pop-shared files
+                if 'gainRef' in deleteZorro.zorroObj.files:
+                    deleteZorro.zorroObj.files.pop['gainRef']
+                    
                 # DELETE ALL FILES
                 for filename in deleteZorro.zorroObj.files.values():
                     try: os.remove( filename )
@@ -1567,8 +1641,8 @@ class skulkManager(QtCore.QThread):
         # Give high priority
         newState.topPriority()   
         
-        # Force to state READY
-        newState._zorroState__state = READY
+        # Decress state in case we were in an operation
+        newState.decrementState()
         newState.name = newState.zorroObj.files['config']
         
         # Add to globalHeap
@@ -1615,7 +1689,15 @@ class skulkManager(QtCore.QThread):
             return
             
         logList = glob.glob( os.path.join( self.paths['output_dir'], "*.zor" ) )
-        for log in logList:
+        if len( logList ) == 0:
+            return
+            
+        print( logList )
+        logList.sort()
+        print( logList )
+        
+        # Prioritize by lexigraphic sort
+        for J, log in enumerate(logList):
             # This is no longer a problem as Zorro logs are now .zor format
             #if log.endswith( "ctffind3.log" ): # Avoid trying CTF logs if they happen to be in the same place.
             #    continue
@@ -1625,10 +1707,15 @@ class skulkManager(QtCore.QThread):
             if not bool(stateObj):
                 newState = zorroState( log, self.zorroDefault, self.paths, self.messageQueue, notify=False )
                 
+                # These will be very low priority compared to mtime priorities.
+                newState.priority = J + 1E9 
+                
                 self.__globalHeap[ newState.id ] = newState
                 self.automatorUpdate( newState.id, newState.name, STATE_COLORS[newState.state] )
             else:
                 self.automatorUpdate( stateObj.id, stateObj.name, STATE_COLORS[stateObj.state] )
+        
+        
             
 
 

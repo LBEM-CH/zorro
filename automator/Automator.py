@@ -36,6 +36,7 @@ from . import zorroSkulkManager
 # from copy import deepcopy
 from . import Ui_Automator
 from . import Ui_DialogFileLoc
+from . import Ui_DialogOrientGainRef
 
 # import time
 import functools
@@ -86,10 +87,15 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.MainWindow = QtGui.QMainWindow()
         self.ImageDialog = QtGui.QDialog()
         self.FileLocDialog = QtGui.QDialog()
+        self.OrienGainRefDialog = QtGui.QDialog()
 
         self.setupUi(self.MainWindow)
         self.ui_FileLocDialog = Ui_DialogFileLoc.Ui_DialogFileLocations()
         self.ui_FileLocDialog.setupUi( self.FileLocDialog )
+        
+        self.ui_OrienGainRefDialog = Ui_DialogOrientGainRef.Ui_DialogOrientGainRef()
+        self.ui_OrienGainRefDialog.setupUi( self.OrienGainRefDialog )
+        
         # Force absolute paths to icons
         self.joinIconPaths()
         
@@ -128,6 +134,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.actionSet_paths.triggered.connect( self.FileLocDialog.show )
         self.actionCitations.triggered.connect( self.showCitationsDialog )
         self.actionIMS_shortcuts.triggered.connect( self.showImsHelpDialog )
+        self.actionOrient_Gain_Reference.triggered.connect( self.OrienGainRefDialog.show )
         
         self.actionGroupPopout = QtGui.QActionGroup(self)
         self.actionGroupPopout.addAction( self.actionPrefer2dx_viewer )
@@ -138,6 +145,10 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.listFiles.setSortingEnabled( True )
         
         
+        #==============================================================================
+        # CAREFUL WITH FUNCTOOLS, IF OBJECTS ARE CREATED AND DESTROYED THEY AREN'T
+        # UPDATED WITH THE PARTIAL CONTEXT
+        #==============================================================================
         
         # Paths
         self.ui_FileLocDialog.tbOpenInputPath.clicked.connect( functools.partial( 
@@ -157,28 +168,43 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
 
         self.ui_FileLocDialog.leInputPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'input_dir', self.ui_FileLocDialog.leInputPath.text ) )
+            self.updateDict, u"skulk.paths", u'input_dir', self.ui_FileLocDialog.leInputPath.text ) )
         self.ui_FileLocDialog.leOutputPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'output_dir', self.ui_FileLocDialog.leOutputPath.text ) )
+            self.updateDict, u"skulk.paths", u'output_dir', self.ui_FileLocDialog.leOutputPath.text ) )
         self.ui_FileLocDialog.leRawPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'raw_subdir', self.ui_FileLocDialog.leRawPath.text ) )
+            self.updateDict, u"skulk.paths", u'raw_subdir', self.ui_FileLocDialog.leRawPath.text ) )
         self.ui_FileLocDialog.leSumPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'sum_subdir', self.ui_FileLocDialog.leSumPath.text ) ) 
+            self.updateDict, u"skulk.paths", u'sum_subdir', self.ui_FileLocDialog.leSumPath.text ) ) 
         self.ui_FileLocDialog.leAlignPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'align_subdir', self.ui_FileLocDialog.leAlignPath.text ) )
+            self.updateDict, u"skulk.paths", u'align_subdir', self.ui_FileLocDialog.leAlignPath.text ) )
         self.ui_FileLocDialog.leFiguresPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'fig_subdir', self.ui_FileLocDialog.leFiguresPath.text ) )    
+            self.updateDict, u"skulk.paths", u'fig_subdir', self.ui_FileLocDialog.leFiguresPath.text ) )    
         self.ui_FileLocDialog.leGainRefPath.editingFinished.connect( functools.partial( 
-            self.updateDict, self.skulk.paths, u'gainRef', self.ui_FileLocDialog.leGainRefPath.text ) ) 
+            self.updateDict, u"skulk.paths", u'gainRef', self.ui_FileLocDialog.leGainRefPath.text ) ) 
         # Gainref has to be provided to the zorroDefault object later.   
             
         # File output and compression
+        self.ui_FileLocDialog.comboCompressor.setCurrentIndex(0) # Default to None
         self.ui_FileLocDialog.comboCompressor.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u'files.compressor', self.ui_FileLocDialog.comboCompressor.currentText ) )
+        self.ui_FileLocDialog.cbGainRot.stateChanged.connect( functools.partial( 
+            self.updateZorroDefault, u'gainFlipsGatan.Diagonal', self.ui_FileLocDialog.cbGainRot.isChecked ) )
+        self.ui_FileLocDialog.cbGainHorzFlip.stateChanged.connect( functools.partial( 
+            self.updateZorroDefault, u'gainFlipsGatan.Horizontal', self.ui_FileLocDialog.cbGainHorzFlip.isChecked ) )
+        self.ui_FileLocDialog.cbGainVertFlip.stateChanged.connect( functools.partial( 
+            self.updateZorroDefault, u'gainFlipsGatan.Vertical', self.ui_FileLocDialog.cbGainVertFlip.isChecked ) )
+        
+        self.ui_OrienGainRefDialog.tbOrientGain_GainRef.clicked.connect( functools.partial( 
+            self.openFileDialog, u'OrientGain_GainRef', True ) )
+        self.ui_OrienGainRefDialog.tbOrientGain_TargetStack.clicked.connect( functools.partial( 
+            self.openFileDialog, u'OrientGain_TargetStack', True ) )
+        
 #        self.ui_FileLocDialog.comboOutputFormat.currentIndexChanged.connect( functools.partial( 
 #            self.updateZorroDefault, u'files.ext', self.ui_FileLocDialog.comboOutputFormat.currentText ) )
         self.ui_FileLocDialog.sbCLevel.valueChanged.connect( functools.partial( 
-            self.updateZorroDefault, u'files.cLevel', self.ui_FileLocDialog.sbCLevel.value ) )    
+            self.updateZorroDefault, u'files.cLevel', self.ui_FileLocDialog.sbCLevel.value ) )
+            
+        self.ui_OrienGainRefDialog.pbRun.pressed.connect( self.run_OrienGainRef )
         
         # Cache and Qsub paths
         self.tbOpenCachePath.clicked.connect( functools.partial( 
@@ -189,7 +215,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
         # Common configuration
 #        self.comboRegistrator.currentIndexChanged.connect( functools.partial( 
-#            self.updateDict, self.cfgCommon, "registrator", self.comboRegistrator.currentText ) )
+#            self.updateDict, u"cfgCommon", "registrator", self.comboRegistrator.currentText ) )
         self.comboTriMode.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u"triMode", self.comboTriMode.currentText ) )
         self.sbPeaksigThres.valueChanged.connect( functools.partial( 
@@ -216,8 +242,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateZorroDefault, u"CTFProgram", self.comboCtfProgram.currentText ) )  
      
         # DEBUG
-        self.cbSuppressOrigin.stateChanged.connect( functools.partial( 
-            self.skulk.setDEBUG, self.cbDebuggingOutput.isChecked ) )  
+        self.cbDebuggingOutput.stateChanged.connect( functools.partial( 
+            self.updateDict, u"cfgCommon", u"DEBUG", self.cbDebuggingOutput.isChecked ) )  
             
         # Advanced configuration
         self.sbShapePadX.valueChanged.connect( functools.partial( 
@@ -242,6 +268,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateZorroDefault, u"voltage", self.sbVoltage.value ) )  
         self.sbC3.valueChanged.connect( functools.partial( 
             self.updateZorroDefault, u"C3", self.sbC3.value ) )
+        self.sbGain.valueChanged.connect( functools.partial( 
+            self.updateZorroDefault, u"gain", self.sbGain.value ) )
         self.sbMaxShift.valueChanged.connect( functools.partial( 
             self.updateZorroDefault, u"maxShift", self.sbMaxShift.value ) )    
         self.comboOriginMode.currentIndexChanged.connect( functools.partial( 
@@ -267,20 +295,20 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # Cluster configuration
         # Setup default values
         self.comboClusterType.currentIndexChanged.connect( functools.partial( 
-            self.updateDict, self.cfgCluster, u'cluster_type', self.comboClusterType.currentText ) )
+            self.updateDict, u"cfgCluster", u'cluster_type', self.comboClusterType.currentText ) )
         self.sbNThreads.valueChanged.connect( functools.partial( 
-            self.updateDict, self.cfgCluster, u'n_threads', self.sbNThreads.value ) )
+            self.updateDict, u"cfgCluster", u'n_threads', self.sbNThreads.value ) )
         self.sbNProcesses.valueChanged.connect( functools.partial( 
-            self.updateDict, self.cfgCluster, u"n_processes", self.sbNProcesses.value ) )
+            self.updateDict, u"cfgCluster", u"n_processes", self.sbNProcesses.value ) )
         self.sbNSyncs.valueChanged.connect( functools.partial( 
-            self.updateDict, self.cfgCluster, u"n_syncs", self.sbNSyncs.value ) )    
+            self.updateDict, u"cfgCluster", u"n_syncs", self.sbNSyncs.value ) )    
         self.cbMultiprocessPlots.stateChanged.connect( functools.partial(
             self.updateZorroDefault, u'plotDict.multiprocess', self.cbMultiprocessPlots.isChecked ) )
             
         self.leCachePath.textEdited.connect( functools.partial( 
             self.updateZorroDefault, u'cachePath', self.leCachePath.text ))
         self.leQsubHeaderFile.textEdited.connect( functools.partial( 
-            self.updateDict, self.cfgCluster, u"qsubHeader", self.leQsubHeaderFile.text ) )   
+            self.updateDict, u"cfgCluster", u"qsubHeader", self.leQsubHeaderFile.text ) )   
         self.comboFFTWEffort.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault,  u"fftw_effort", self.comboFFTWEffort.currentText ) )    
         self.listFiles.itemActivated.connect( self.displaySelectedFile  )
@@ -289,57 +317,57 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # All the Gauto's are line-edits so that we can have None or "" as the values
         # Plus I don't have to worry about types.
         self.leGautoBoxsize.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'boxsize', self.leGautoBoxsize.text ) )
+            self.updateDict, u"cfgGauto", u'boxsize', self.leGautoBoxsize.text ) )
         self.leGautoDiameter.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'diameter', self.leGautoDiameter.text ) )    
+            self.updateDict, u"cfgGauto", u'diameter', self.leGautoDiameter.text ) )    
         self.leGautoMin_Dist.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'min_dist', self.leGautoMin_Dist.text ) )        
+            self.updateDict, u"cfgGauto", u'min_dist', self.leGautoMin_Dist.text ) )        
         # Template
         self.leGautoTemplates.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'T', self.leGautoTemplates.text ) )
+            self.updateDict, u"cfgGauto", u'T', self.leGautoTemplates.text ) )
         self.tbGautoOpenTemplate.clicked.connect( functools.partial( 
             self.openFileDialog, u'gautoTemplates', True) )
         # Template pixelsize?    
         self.leGautoAng_Step.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'ang_step', self.leGautoAng_Step.text ) )      
+            self.updateDict, u"cfgGauto", u'ang_step', self.leGautoAng_Step.text ) )      
         self.leGautoSpeed.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'speed', self.leGautoSpeed.text ) ) 
+            self.updateDict, u"cfgGauto", u'speed', self.leGautoSpeed.text ) ) 
         self.leGautoCCCutoff.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'cc_cutoff', self.leGautoCCCutoff.text ) ) 
+            self.updateDict, u"cfgGauto", u'cc_cutoff', self.leGautoCCCutoff.text ) ) 
         self.leGautoLsigma_D.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lsigma_D', self.leGautoLsigma_D.text ) ) 
+            self.updateDict, u"cfgGauto", u'lsigma_D', self.leGautoLsigma_D.text ) ) 
         self.leGautoLsigma_Cutoff.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lsigma_cutoff', self.leGautoLsigma_Cutoff.text ) ) 
+            self.updateDict, u"cfgGauto", u'lsigma_cutoff', self.leGautoLsigma_Cutoff.text ) ) 
         self.leGautoLave_D.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lave_D', self.leGautoLave_D.text ) ) 
+            self.updateDict, u"cfgGauto", u'lave_D', self.leGautoLave_D.text ) ) 
         self.leGautoLave_Max.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lave_max', self.leGautoLave_Max.text ) ) 
+            self.updateDict, u"cfgGauto", u'lave_max', self.leGautoLave_Max.text ) ) 
         self.leGautoLave_Min.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lave_min', self.leGautoLave_Min.text ) ) 
+            self.updateDict, u"cfgGauto", u'lave_min', self.leGautoLave_Min.text ) ) 
         self.leGautoLP.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'lp', self.leGautoLP.text ) ) 
+            self.updateDict, u"cfgGauto", u'lp', self.leGautoLP.text ) ) 
         self.leGautoHP.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'hp', self.leGautoHP.text ) ) 
+            self.updateDict, u"cfgGauto", u'hp', self.leGautoHP.text ) ) 
         self.leGautoLPPre.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'pre_lp', self.leGautoLPPre.text ) ) 
+            self.updateDict, u"cfgGauto", u'pre_lp', self.leGautoLPPre.text ) ) 
         self.leGautoHPPre.editingFinished.connect( functools.partial( 
-            self.updateDict, self.cfgGauto, u'pre_hp', self.leGautoHPPre.text ) ) 
+            self.updateDict, u"cfgGauto", u'pre_hp', self.leGautoHPPre.text ) ) 
             
         # Flags go into cfgGPlot, simply so I can use a generator on cfgGauto and handle these manually
         self.cbGautoDoprefilter.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"do_pre_filter", self.cbGautoDoprefilter.isChecked ) )
+            self.updateDict, u"cfgGplot", u"do_pre_filter", self.cbGautoDoprefilter.isChecked ) )
         self.cbGautoPlotCCMax.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_ccmax_mic", self.cbGautoPlotCCMax.isChecked ) )
+            self.updateDict, u"cfgGplot", u"write_ccmax_mic", self.cbGautoPlotCCMax.isChecked ) )
         self.cbGautoPlotPref.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_pref_mic", self.cbGautoPlotPref.isChecked ) )
+            self.updateDict, u"cfgGplot", u"write_pref_mic", self.cbGautoPlotPref.isChecked ) )
         self.cbGautoPlotBG.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_bg_mic", self.cbGautoPlotBG.isChecked ) )
+            self.updateDict, u"cfgGplot", u"write_bg_mic", self.cbGautoPlotBG.isChecked ) )
         self.cbGautoPlotBGFree.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_bgfree_mic", self.cbGautoPlotBGFree.isChecked ) )
+            self.updateDict, u"cfgGplot", u"write_bgfree_mic", self.cbGautoPlotBGFree.isChecked ) )
         self.cbGautoPlotLsigma.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_lsigma_mic", self.cbGautoPlotLsigma.isChecked ) )    
+            self.updateDict, u"cfgGplot", u"write_lsigma_mic", self.cbGautoPlotLsigma.isChecked ) )    
         self.cbGautoPlotMask.stateChanged.connect( functools.partial( 
-            self.updateDict, self.cfgGplot, u"write_mic_mask", self.cbGautoPlotMask.isChecked ) )     
+            self.updateDict, u"cfgGplot", u"write_mic_mask", self.cbGautoPlotMask.isChecked ) )     
             
             
         # Toolbar buttons
@@ -460,9 +488,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.cfgCluster = { u'n_threads': len(nz.cpu.info), u'n_processes':1, u'n_syncs':2, 
                                    u'cluster_type': u'local', u'qsubHeader':u"" }
 
-        self.sbNProcesses.setValue( self.cfgCluster['n_processes'] )
-        self.sbNThreads.setValue( self.cfgCluster['n_threads'] )
-        self.sbNSyncs.setValue( self.cfgCluster['n_syncs'] )
+        self.sbNProcesses.setValue( self.cfgCluster[u'n_processes'] )
+        self.sbNThreads.setValue( self.cfgCluster[u'n_threads'] )
+        self.sbNSyncs.setValue( self.cfgCluster[u'n_syncs'] )
         
             
     def joinIconPaths(self):
@@ -487,7 +515,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.ui_FileLocDialog.tbOpenRawPath.setIcon(icon1)
         self.ui_FileLocDialog.tbOpenSumPath.setIcon(icon1)
         self.ui_FileLocDialog.tbOpenAlignPath.setIcon(icon1)
-        # self.ui_FileLocDialog.tbOpenCWD.setIcon(icon1)
+        
+        self.ui_OrienGainRefDialog.tbOrientGain_GainRef.setIcon(icon1)
+        self.ui_OrienGainRefDialog.tbOrientGain_TargetStack.setIcon(icon1)
         
         icon2 = QtGui.QIcon()
         icon2.addPixmap(QtGui.QPixmap(os.path.join( self.source_dir, "icons/go-next.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
@@ -520,13 +550,15 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         if not self.checkValidPaths():
             return
             
+        print( "##########IN runSkulk ############" )
+        print( self.cfgCluster )
+        
         # Init hosts and otherwise reset the skulkManager
-        self.cfgCluster[u'n_threads'] = self.sbNThreads.value()
-        self.skulk.initHosts( cluster_type=self.cfgCluster[u'cluster_type'], 
-                             n_processes=self.cfgCluster[u'n_processes'], 
+        self.skulk.initHosts( cluster_type = self.cfgCluster[u'cluster_type'], 
+                             n_processes = self.cfgCluster[u'n_processes'], 
                              n_threads = self.cfgCluster[u'n_threads'],
-                             n_syncs=self.cfgCluster[u'n_syncs'],
-                             qsubHeader=self.cfgCluster[u'qsubHeader'] )
+                             n_syncs = self.cfgCluster[u'n_syncs'],
+                             qsubHeader = self.cfgCluster[u'qsubHeader'] )
 
         # Make a new thread
         self.skulk.start()
@@ -535,7 +567,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.tbKillAll.setEnabled(True)
         self.tbRun.setEnabled(False)
         self.pageClusterConfig.setEnabled(False)
-        
+        self.menuAnalysis.setEnabled(False)
         
         
     def killSkulk( self ):
@@ -549,11 +581,10 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.tbKillAll.setEnabled(False)
         self.tbRun.setEnabled(True)
         self.pageClusterConfig.setEnabled(True)
-        
-
+        self.menuAnalysis.setEnabled(True)
 
     @QtCore.Slot()    
-    def updateFromSkulk( self, state_id, name, color ):
+    def updateFromSkulk( self, state_id, name, command ):
         """
         This is a message from the skulk manager that it's had a file change.  Remember that it's typed as 
         the signal is Qt, so if you change it in skulkManager you need to change the static declaration.
@@ -585,8 +616,15 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         
         # If we rename or delete the file, try to get it by state_id
         # print( "Updating file %s with id %s to color/state %s" %(name,state_id,color) )
-        if color == 'rename':
-            print( "RENAME: (%s) %s " % (state_id, self.stateIds[state_id]) )
+        fullName = name
+        baseName = os.path.basename( name )
+        
+        print( "DEBUG: fullName: %s, baseName: %s" % (fullName, baseName) )
+        
+        if command == 'rename':
+            if self.skulk.DEBUG:
+                print( "RENAME: (%s) %s " % (state_id, self.stateIds[state_id]) )
+                
             try:
                 oldName = self.stateIds.pop( state_id )
                 self.reverseIds.pop( oldName )
@@ -598,18 +636,29 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 
             if len( listItem ) > 0:
                 listItem = listItem[0]
-                oldName = listItem.text()
-                # Maybe this isn't being updated or something?
-                listItem.setText( name )
-                # print( "DEBUG: Renamed item from %s to %s" %(oldName, listItem.text() ) )
-                
+                oldListName = listItem.text()
+                self.listFiles.takeItem( self.listFiles.row( listItem )  )
+            else:
+                print( "DEBUG RENAME: Failed to find oldName: %s" % oldName )
+            
+            # We really have to remove the listItem as it seems Qt passes us a 
+            # copy instead of a pointer.  I.e. updates by setText dont' work.
+            
+            listItem = QtGui.QListWidgetItem( baseName )
+            self.listFiles.addItem( listItem )
+            newListName = listItem.text()
+            
+            print( "DEBUG RENAME: (%s) from: %s, to: %s" %( state_id, oldListName, newListName ) )
+
+            
             # We need to update our dicts
-            self.stateIds[state_id] = name
-            self.reverseIds[name] = state_id
+            self.stateIds[state_id] = baseName
+            self.reverseIds[baseName] = state_id
             # List should self sort
             return
-        elif color == 'delete':
-            print( "DELETE: (%s) %s " % (state_id, self.stateIds[state_id]) )
+        elif command == 'delete':
+            if self.skulk.DEBUG:
+                print( "DELETE: (%s) %s " % (state_id, self.stateIds[state_id]) )
             try:
                 oldName = self.stateIds.pop( state_id )
                 self.reverseIds.pop( oldName )
@@ -617,29 +666,30 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
                 raise KeyError( "Automator: Could not find state# %s in ID dict" % state_id )
                 return
                 
-            listItem = self.listFiles.findItems( name, QtCore.Qt.MatchFixedString )
+            listItem = self.listFiles.findItems( baseName, QtCore.Qt.MatchFixedString )
             if len( listItem ) > 0:
                 listItem = listItem[0]
                 self.listFiles.takeItem( self.listFiles.row( listItem )  )
             return
-        elif color == u'indigo':   # u'Finished'
-            self.statusbar.showMessage( "Finished processing: " + name )
+            
+        elif command == u'indigo':   # u'Finished'
+            self.statusbar.showMessage( "Finished processing: " + fullName )
             
         if name != None: 
             # Update the id - key combination
-            self.stateIds[state_id] = name
-            self.reverseIds[name] = state_id
+            self.stateIds[state_id] = baseName
+            self.reverseIds[baseName] = state_id
         else:
             # If name == None, we want to ID the key by its id number
-            name = self.stateIds[state_id]
+            baseName = self.stateIds[state_id]
         
 
         # Check to see if the item exists already
-        listItem = self.listFiles.findItems( name, QtCore.Qt.MatchFixedString )
+        listItem = self.listFiles.findItems( baseName, QtCore.Qt.MatchFixedString )
 
         if len(listItem) == 0:
             # New id-key pair
-            listItem = QtGui.QListWidgetItem( name )
+            listItem = QtGui.QListWidgetItem( baseName )
             self.listFiles.addItem( listItem )
         else:
             listItem = listItem[0]
@@ -647,9 +697,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         
         # Can't compare QtGui.QListItem to None, so just use a try
         try:
-            if color != None:
-                listItem.setForeground( QtGui.QBrush( QtGui.QColor( u""+color ) ) )
-                listItem.setToolTip( TOOLTIP_STATUS[color] )
+            if command != None:
+                listItem.setForeground( QtGui.QBrush( QtGui.QColor( u""+command ) ) )
+                listItem.setToolTip(  "%s: %s" % (TOOLTIP_STATUS[command],fullName) )
             else:
                 listItem.setForeground( QtGui.QBrush( QtGui.QColor( u"black" ) ) )
                 listItem.setToolTip( u"Unknown" )
@@ -668,11 +718,13 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
     def displaySelectedFile( self, item ):
         # Get the ZorroObj from the stack browser
         name = item.text()
-        print( "Search for %s" % name + " in %s " % self.stateIds )
+        # print( "Search for %s" % name + " in %s " % self.stateIds )
         
         reverseState = {v: k for k, v in self.stateIds.items()}
         if name in reverseState:
-            print( "Trying to update name: " + str(name) + ", " + str(reverseState[name]) )
+            #if self.skulk.DEBUG:
+            #    print( "Trying to update name: " + str(name) + ", " + str(reverseState[name]) )
+                
             self.updateAllViews( zorroObj = self.skulk[reverseState[name]].zorroObj )
         
         
@@ -721,6 +773,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         from . import Gautoauto
         
         itemList = self.listFiles.selectedItems()
+        if len( itemList ) == 0:
+            return
         
         sumList = []
         pngFronts = []
@@ -818,10 +872,21 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         if command == 'shapeBin':
             self.zorroDefault.shapeBinned = [self.sbBinCropY.value(), self.sbBinCropX.value()]
             
-    def updateDict( self, dictname, key, funchandle, funcarg = None ):
-
-        dictname[key] = funchandle()
-        # print( "updateDict: %s[ %s ] : %s " % (dictname, key, dictname[key] ) )
+    def updateDict( self, dicthandle, key, funchandle, funcarg = None ):
+        
+        # This is not mydict, this is a copy of mydict!  Ergh...
+        if type(dicthandle) == str or ( sys.version.major == 2 and type(dicthandle) == unicode): 
+            dicthandle = self.__getattribute__( dicthandle )
+        
+        dicthandle[key] = funchandle()
+        if key == u"DEBUG":
+            self.skulk.setDEBUG( self.cbDebuggingOutput.isChecked() )
+            
+        if self.skulk.DEBUG:
+            print( "updateDict: [ %s ] : %s " % (key, dicthandle[key] ) )
+            print( dicthandle )
+            print( self.cfgCluster )
+            
         #if key == u'n_threads':
         #    for hostName, hostObj in self.skulk.procHosts:
         #        hostObj.n_threads = funchandle()
@@ -837,10 +902,11 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # Check if we have a dict by splitting on '.', so i.e. plotDict.multiprocess => plotDict['mulitprocess']
         tokens = zorroAttrName.split('.')
 
-        try:
-            print( "Changing zorroDefault."+ tokens + " from: " + 
-                str(self.zorroDefault.__getattribute__(tokens[0])) + " to: " + str(newVal) )
-        except: pass
+        if self.skulk.DEBUG:
+            try:
+                print( "Changing zorroDefault."+ tokens + " from: " + 
+                    str(self.zorroDefault.__getattribute__(tokens[0])) + " to: " + str(newVal) )
+            except: pass
                 
         if newVal == 'none':
             newVal = None
@@ -855,7 +921,38 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # Stealing reference
         self.skulk.zorroDefault = self.zorroDefault
 
-
+    def run_OrienGainRef( self ):
+        from zorro.scripts import orientGainReference 
+        """
+        def orientGainRef( gainRefName, stackName, 
+                   stackIsInAHole=True, applyHotPixFilter = True, doNoiseCorrelation=True,
+                   relax=0.95, n_threads = None )
+        """
+        
+        self.ui_OrienGainRefDialog.progressBar.setMaximum(0)
+        self.ui_OrienGainRefDialog.progressBar.show()
+        self.ui_OrienGainRefDialog.progressBar.setValue(0)
+        
+        
+        # Maybe this will have to be a subprocess with argv, if you want to have 
+        # a progress bar?  Ugh, what a pain...
+        try:
+            orientation = orientGainReference.orientGainRef( 
+                                       self.ui_OrienGainRefDialog.leInputPath.text(),
+                                       self.ui_OrienGainRefDialog.leGainRefPath.text(),
+                                       stackIsInAHole = self.ui_OrienGainRefDialog.cbStackInHole.isChecked(),
+                                       applyHotPixFilter = self.ui_OrienGainRefDialog.cbApplyHotpixFilt.isChecked(), 
+                                       doNoiseCorrelation = self.ui_OrienGainRefDialog.cbDoCorrel.isChecked(),
+                                       relax = self.ui_OrienGainRefDialog.sbHotpixRelax.value(),
+                                       n_threads = self.sbNThreads.value() )
+            self.ui_FileLocDialog.cbGainRot.setChecked( orientation[0] )
+            self.ui_FileLocDialog.cbGainVertFlip.setChecked( orientation[1] )   
+            self.ui_FileLocDialog.cbGainHorzFlip.setChecked( orientation[2] )   
+        except Exception as E:
+            print( E )
+        self.ui_OrienGainRefDialog.progressBar.setMaximum(100)
+        self.ui_OrienGainRefDialog.progressBar.hide()
+        
     def quitApp( self, event = None ):
         print( "Shutting down: " + str(event) )
         self.killSkulk()
@@ -903,9 +1000,12 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         ##### Common configuration ####
         try:
             self.cfgCommon = json.loads( config.get( u'automator', u'common' ) )
-        except:
-            pass
-        
+        except: pass
+    
+        try:
+            self.cbDebuggingOutput.setChecked( self.cfgCommon['DEBUG'] )
+        except: pass
+
         if u"version" in self.cfgCommon and __version__ > self.cfgCommon[u"version"]:
             print( "WARNING: Automator (%s) is not backward compatible with %s, version %s" % 
                 (__version__, cfgfilename,self.cfgCommon[u"version"] ) )
@@ -919,8 +1019,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             
             for key in norm_paths:
                 self.skulk.paths[key] = norm_paths[key]
-        except:
-            pass
+        except: pass
         
         
         try:
@@ -955,11 +1054,14 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
                 self.ui_FileLocDialog.comboCompressor.findText( 
                 self.zorroDefault.files['compressor'] ) )
         except: pass
-#        try: 
-#            self.ui_FileLocDialog.comboOutputFormat.setCurrentIndex( 
-#                self.ui_FileLocDialog.comboOutputFormat.findText( 
-#                self.zorroDefault.files['ext'].upper() ) )
-#        except: pass 
+        try:
+            self.ui_FileLocDialog.cbGainHorzFlip.setChecked( 
+                self.zorroDefault.gainFlipsGatan['Horizontal'])
+            self.ui_FileLocDialog.cbGainVertFlip.setChecked( 
+                self.zorroDefault.gainFlipsGatan['Vertical'])
+            self.ui_FileLocDialog.cbGainRot.setChecked( 
+                self.zorroDefault.gainFlipsGatan['Diagonal'])
+        except: pass
         try: 
             self.ui_FileLocDialog.sbCLevel.setValue( int(self.zorroDefault.files['cLevel']) )
         except: pass
@@ -1069,6 +1171,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         try: self.sbVoltage.setValue( self.zorroDefault.voltage )
         except: pass
         try: self.sbC3.setValue( self.zorroDefault.C3 )
+        except: pass
+        try: self.sbGain.setValue( self.zorroDefault.gain )
         except: pass
         try: self.sbMaxShift.setValue( self.zorroDefault.maxShift )
         except: pass
@@ -1250,13 +1354,21 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             # Get directory from the lineedit object
             print( "TODO" )
             
-        if name == 'qsubHeader':
+        if name == u'OrientGain_GainRef':
+            self.ui_OrienGainRefDialog.leGainRefPath.setText( newFile )
+            
+        elif name == u'OrientGain_TargetStack':
+            self.ui_OrienGainRefDialog.leInputPath.setText( newFile )
+            
+        elif name == 'qsubHeader':
             self.cfgCluster[u'qsubHeader'] = newFile # Would prefer to generate a signal here.
             self.leQsubHeaderFile.setText( newFile )
-        if name == u'gautoTemplates':
+            
+        elif name == u'gautoTemplates':
             self.cfgGauto[u'T'] = newFile
             self.leGautoTemplates.setText( newFile )
-        if name == u'gainRef':
+            
+        elif name == u'gainRef':
             # self.zorroDefault.files['gainRef'] = newFile
             print( "openFileDialog: Setting gainRef to %s" % newFile )
             self.skulk.paths['gainRef'] = newFile
@@ -1278,28 +1390,31 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             
         #self.FileLocDialog.raise_()
         self.FileLocDialog.activateWindow()
+        
 
-        self.skulk.paths[pathname] = newPath
         if pathname == u'input_dir':
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leInputPath.setText( self.skulk.paths.get_real(pathname) )
-#        if pathname == u'cwd':
-#            self.ui_FileLocDialog.leCWD.setText( self.skulk.paths.get_real(pathname) )
+
         elif pathname == u'output_dir':
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leOutputPath.setText( self.skulk.paths.get_real(pathname) )
+            
         elif pathname == u'raw_subdir': 
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leRawPath.setText( self.skulk.paths.get_real(pathname) )
 
         elif pathname == u'sum_subdir':
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leSumPath.setText( self.skulk.paths.get_real(pathname) )
 
         elif pathname == u'align_subdir':
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leAlignPath.setText( self.skulk.paths.get_real(pathname) )
 
         elif pathname == u'fig_subdir':
+            self.skulk.paths[pathname] = newPath
             self.ui_FileLocDialog.leFiguresPath.setText( self.skulk.paths.get_real(pathname) )
-        
-        elif pathname == u'gainRef':
-            self.ui_FileLocDialog.leGainRefPath.setText( self.skulk.paths.get_real(pathname) )
             
         elif pathname == u'cachePath':
             print( "TODO: Automator.openPathDialog; manage cachePath" )

@@ -125,7 +125,7 @@ class ImageRegistrator(object):
         self.imageSum = None
         self.filtSum = None # Dose-filtered, Wiener-filtered, etc. representations go here
         self.gainRef = None # For application of gain reference in Zorro rather than Digital Micrograph/TIA/etc.
-        self.gainFlipsGatan = {"Horizontal": False, "Vertical": True, "Diagonal":True } # Which axes need to be flipped in the gain reference
+        self.gainFlipsGatan = {"Horizontal": True, "Vertical": True, "Diagonal":False } # Which axes need to be flipped in the gain reference
         
         # One of None,  'dose', 'dose,background', 'dosenorm', 'gaussLP', 'gaussLP,background'
         # also 'hot' can be in the comma-seperated list for pre-filtering of hot pixels
@@ -134,7 +134,7 @@ class ImageRegistrator(object):
         self.doseFiltParam = [None, 0.24499, -1.6649, 2.8141, 32, 0]
         # for 'hot' in filterMode
         self.hotpixInfo = { u"logisticK":6.0, u"relax":1.0, u"maxSigma":8.0, u"psf": u"K2",
-                           u"guessHotpix":0, u"guessDeadpix":0 }
+                           u"guessHotpix":0, u"guessDeadpix":0, u"decorrOutliers":False }
         
         
         self.FFTSum = None
@@ -213,7 +213,7 @@ class ImageRegistrator(object):
         self.files = { u"config":None, u"stack":None, u"mask":None, u"sum":None, 
                        u"align":None, u"figurePath":None, u"xc":None, 
                        u"moveRawPath":None, u"original":None, u"gainRef":None,
-                       u"stdout": None,
+                       u"stdout": None, u"automatch":None, u"rejected":None,
                        u"compressor": None, u"cLevel": 1 }
 
         #self.savePDF = False
@@ -243,7 +243,8 @@ class ImageRegistrator(object):
         stackPath, stackFront = os.path.split( stackName )
         stackFront = os.path.splitext( stackFront )[0]
         
-        if self.files['compressor'] == None:
+        print( "DEBUG: Zorro compressor = %s" % self.files['compressor'] )
+        if not 'compressor' in self.files or not bool(self.files['compressor']):
             mrcExt = ".mrc"
             mrcsExt = ".mrcs"
         else:
@@ -1331,15 +1332,15 @@ class ImageRegistrator(object):
         mean_errorNorm = np.sum( weights * acceptedErrorNorm ) / np.sum(weights)
         mean_unweighted = np.mean( errorNorm[acceptedEqns] )
         
-        print( "RMS: " + str(np.sum( weights * acceptedErrorNorm**2 )) )
-        print( "Normed RMS: " + str(np.sum( weights * acceptedErrorNorm**2 ) / np.sum(weights)))
-        print( "mean_errorNorm**2 + " + str(  mean_errorNorm**2 ))
+        # print( "RMS: " + str(np.sum( weights * acceptedErrorNorm**2 )) )
+        # print( "Normed RMS: " + str(np.sum( weights * acceptedErrorNorm**2 ) / np.sum(weights)))
+        # print( "mean_errorNorm**2 + " + str(  mean_errorNorm**2 ))
         std_errorNorm = np.sqrt( np.sum( weights * acceptedErrorNorm**2 ) 
                 / np.sum(weights) - mean_errorNorm**2 )
         # np.sqrt( np.sum( unalignedHist * unalignedCounts**2 )/ sumFromHist - meanFromHist*meanFromHist  )
 
         std_unweighted = np.std( acceptedErrorNorm )
-        print( "sum(acceptedErrorNorm): %f" % np.sum(acceptedErrorNorm) )
+        # print( "sum(acceptedErrorNorm): %f" % np.sum(acceptedErrorNorm) )
         print( "MEAN ERROR (weighted: %f | unweighted: %f )" % (mean_errorNorm, mean_unweighted)  )
         print( "STD ERROR (weighted: %f | unweighted: %f )" % (std_errorNorm, std_unweighted)  )
         
@@ -1596,10 +1597,6 @@ class ImageRegistrator(object):
         
         elif self.subPixReg > 1.0 and self.shiftMethod == u'lanczos':
             # Lanczos realspace shifting
-            # DEBUG: ThreadPool acceleration
-            # DEBUG: memory consumption here is all wrong, something is different on Linux versus Windows?
-            # DEBUG: maybe we need to make that ThreadPool work a class method.  There might be some wierd 
-            # context change or something where the ThreadPool isn't working as intended.
             util.lanczosSubPixShiftStack( self.images, self.translations, n_threads=self.n_threads )
 
             # Original unparallelized version
@@ -2023,7 +2020,8 @@ class ImageRegistrator(object):
         
         # DEBUG: Save the aligned eoReg images for subZorro use
         stackFront = os.path.splitext( self.files[u'sum'] )[0]
-        if self.files['compressor'] == None:
+        print( "DEBUG: Zorro compressor = %s" % self.files['compressor'] )
+        if not 'compressor' in self.files or not bool(self.files['compressor']):
             mrcExt = ".mrc"
         else:
             mrcExt = ".mrcz"
@@ -2194,11 +2192,11 @@ class ImageRegistrator(object):
         picking tools such as Gauto match, and keeps all the intensities uniform for Relion's group scale correction.
         This can be used with Zorro's particle extraction routines.  
         """
-        
+        # print( "DEBUG 1: doseFilter: imageSum # nans %d" % np.sum(np.isnan(self.imageSum) ) )
         critDoseA = np.float32( self.doseFiltParam[1] )
         critDoseB = np.float32( self.doseFiltParam[2] )
         critDoseC = np.float32( self.doseFiltParam[3] )
-        cutoffOrder = self.doseFiltParam[4]
+        cutoffOrder = np.float32( self.doseFiltParam[4] )
         
         if not bool( self.voltage ):
             self.METAstatus = u"error"
@@ -2213,26 +2211,29 @@ class ImageRegistrator(object):
         m = self.images.shape[0]
         N = self.shapePadded[0]
         M = self.shapePadded[1]
-        invPSx = 1.0 / (M*(self.pixelsize*10))
-        invPSy = 1.0 / (N*(self.pixelsize*10))
+        invPSx = np.float32( 1.0 / (M*(self.pixelsize*10)) )
+        invPSy = np.float32( 1.0 / (N*(self.pixelsize*10)) )
         
         xmesh, ymesh = np.meshgrid( np.arange(-M/2,M/2), np.arange(-N/2,N/2))
+        xmesh = xmesh.astype(float_dtype);  ymesh = ymesh.astype(float_dtype)
+        #print( "xmesh.dtype: %s" % xmesh.dtype )
         qmesh = nz.evaluate( "sqrt(xmesh*xmesh*(invPSx**2) + ymesh*ymesh*(invPSy**2))" )
+        #print( "qmesh.dtype: %s" % qmesh.dtype )
         qmesh = np.fft.fftshift( qmesh )
+        
+        #print( "qmesh.dtype: %s" % qmesh.dtype )
         
         # Since there's a lot of hand waving, let's assume dosePerFrame is constant
         # What about on a GIF where the observed dose is lower due to the filter?  That can be incorporated 
         # with a gain estimator.
         if self.doseFiltParam[0] == None:
             totalDose = np.mean( self.imageSum ) 
-            if bool( self.gain ):
-                totalDose *= self.gain
             dosePerFrame = totalDose / m
             missingDose = dosePerFrame * np.float32( self.doseFiltParam[5] )
         else:
             dosePerFrame = self.doseFiltParam[0]
             
-        accumDose = np.zeros( m + 1 ) 
+        accumDose = np.zeros( m + 1, dtype=float_dtype ) 
         accumDose[1:] = np.cumsum( np.ones(m) * dosePerFrame )
         accumDose += missingDose
         # optimalDose = 2.51284 * critDose
@@ -2240,21 +2241,25 @@ class ImageRegistrator(object):
         critDoseMesh = nz.evaluate( "voltageScaling*(critDoseA * qmesh**critDoseB + critDoseC)" )
         #critDoseMesh[N/2,M/2] = 0.001 * np.finfo( 'float32' ).max
         critDoseMesh[ np.int(N/2), np.int(M/2)] = critDoseMesh[ np.int(N/2), np.int(M/2)-1]**2
+        #print( "critDoseMesh.dtype: %s" % critDoseMesh.dtype )
 
         # We probably don't need an entire mesh here...
-        qvect = np.arange(0,self.shapePadded[0]/2) * np.sqrt( invPSx*invPSy )
-        optiDoseVect = np.zeros( int(self.shapePadded[0]/2) )
-        optiDoseVect[1:] = 2.51284*voltageScaling*(critDoseA * qvect[1:]**critDoseB + critDoseC)
+        qvect = (np.arange(0,self.shapePadded[0]/2) * np.sqrt( invPSx*invPSy ) ).astype( float_dtype )
+        optiDoseVect = np.zeros( int(self.shapePadded[0]/2), dtype=float_dtype )
+        optiDoseVect[1:] = np.float32(2.51284)*voltageScaling*(critDoseA * qvect[1:]**critDoseB + critDoseC)
         optiDoseVect[0] = optiDoseVect[1]**2
+        #print( "optiDoseVect.dtype: %s" % optiDoseVect.dtype )
+        
         
         padWidth = np.array(self.shapePadded) - np.array(self.imageSum.shape)
         doseFilteredSum = np.zeros( self.shapePadded, dtype=fftw_dtype )
         filterMag = np.zeros( self.shapePadded, dtype=float_dtype )
         FFTimage = np.empty( self.shapePadded, dtype=fftw_dtype )
         # zorroReg.filtSum = np.zeros_like( zorroReg.imageSum )
-        FFT2, _ = util.pyFFTWPlanner( doseFilteredSum, wisdomFile=os.path.join( self.cachePath, "fftw_wisdom.pkl" ) , 
-                                     effort = self.fftw_effort, n_threads=self.n_threads, doReverse=False )
-                
+        FFT2, IFFT2 = util.pyFFTWPlanner( doseFilteredSum, wisdomFile=os.path.join( self.cachePath, "fftw_wisdom.pkl" ) , 
+                                     effort = self.fftw_effort, n_threads=self.n_threads )
+        
+
         for J in np.arange(0,m):
             print( "Filtering for dose: %.2f e/A^2"% (accumDose[J+1]/(self.pixelsize*10)**2) )
             doseFinish = accumDose[J+1] # Dose at end of frame period
@@ -2262,20 +2267,26 @@ class ImageRegistrator(object):
             # qmesh is in reciprocal angstroms, so maybe I can ignore how they build the mesh and 
             # use a matrix meshgrid
             
-            
-            filt = nz.evaluate( "exp( (-0.5*doseFinish)/critDoseMesh)")
+            minusHalfDose = np.float32( -0.5*doseFinish )
+            filt = nz.evaluate( "exp( minusHalfDose/critDoseMesh)")
+            #print( "filt.dtype: %s" % filt.dtype )
             thresQ = qvect[ np.argwhere( np.abs(doseFinish - optiDoseVect) < np.abs(doseStart - optiDoseVect) )[-1] ]
             
             # thres = nz.evaluate( "abs(doseFinish - optiDoseMesh) < abs(doseStart - optiDoseMesh)" )
             # This filter step is slow, try to do this analytically?  Can we find the radius from the above equation?
             # thres = scipy.ndimage.gaussian_filter( thres.astype(zorro.float_dtype), cutoffSigma )
             thres = nz.evaluate( "exp( -(qmesh/thresQ)**cutoffOrder )" )
+            #print( "thres.dtype: %s" % thres.dtype )
+            #print( "qmesh.dtype: %s" % qmesh.dtype )
+            #print( "thresQ.dtype: %s" % thresQ.dtype )
+            #print( "cutoffOrder.dtype: %s" % cutoffOrder.dtype )
             
             # Numpy's pad is also quite slow
             paddedImage = np.pad( self.images[J,:,:].astype(fftw_dtype),
                                      ((0,padWidth[0]),(0,padWidth[1])), mode=symmetricPad   )
                                      
             FFT2.update_arrays( paddedImage, FFTimage ); FFT2.execute()
+            # print( "FFTimage.dtype: %s" % FFTimage.dtype )
             # Adding Fourier complex magntiude works fine
             if bool(normalize):
                 currentFilter = nz.evaluate( "thres*filt" )
@@ -2285,21 +2296,25 @@ class ImageRegistrator(object):
             else:
                 doseFilteredSum += nz.evaluate( "FFTimage * thres * filt" )
         pass
-    
-        if bool( normalize ):
-            alpha = 1.0 # Prevent divide by zero errors by adding a fixed factor of unity before normalizing.
-            filterMag = 1.0 / ( filterMag + alpha )
-            self.filtSum = np.abs( np.fft.ifft2( doseFilteredSum * filterMag ) )[:self.imageSum.shape[0],:self.imageSum.shape[1]]
-        else:
-            self.filtSum = np.abs( np.fft.ifft2( doseFilteredSum ) )[:self.imageSum.shape[0],:self.imageSum.shape[1]]
         
-
+        # print( "doseFilteredSum.dtype: %s" % doseFilteredSum.dtype )
+        if bool( normalize ):
+            alpha = np.float32(1.0) # Prevent divide by zero errors by adding a fixed factor of unity before normalizing.
+            filterMag = np.float32(1.0) / ( filterMag + alpha )
+            # Using FFTimage as a temporary array 
+            IFFT2.update_arrays( doseFilteredSum*filterMag, FFTimage ); IFFT2.execute()
+        else:
+            # Using FFTimage as a temporary array 
+            IFFT2.update_arrays( doseFilteredSum, FFTimage ); IFFT2.execute()
+        self.filtSum = np.abs( FFTimage[:self.imageSum.shape[0],:self.imageSum.shape[1]] )
+        # print( "filtSum.dtype: %s" % self.filtSum.dtype )
+        # print( "DEBUG: doseFilter.filtSum # nans %d" % np.sum(np.isnan(self.filtSum) ) )
 
         
         del invPSx, invPSy, qmesh, optiDoseVect, doseFinish, doseStart, critDoseA, critDoseB, critDoseC, 
-        del voltageScaling, filt, thres, thresQ, cutoffOrder
+        del voltageScaling, filt, thres, thresQ, cutoffOrder, minusHalfDose
         
-    def hotpixFilter( self  ):
+    def hotpixFilter( self, cutoffLower=None, cutoffUpper=None  ):
         """
         Identifies and removes hot pixels using a stocastic weighted approach.
         replaced with a Gaussian filter.  Hot pixels do not affect Zorro too much 
@@ -2321,8 +2336,9 @@ class ImageRegistrator(object):
                [psf[2]*psf[1], psf[1]*psf[1], psf[1], psf[1]*psf[1], psf[1]*psf[2] ],
                [psf[2], psf[1], 0.0, psf[1], psf[2] ],
                [psf[2]*psf[1], psf[1]*psf[1], psf[1], psf[1]*psf[1], psf[1]*psf[2] ],
-               [ psf[2]*psf[2], psf[2]*psf[1], psf[2], psf[2]*psf[1], psf[2]*psf[2] ] ]  )
+               [ psf[2]*psf[2], psf[2]*psf[1], psf[2], psf[2]*psf[1], psf[2]*psf[2] ] ], dtype='float32'  )
         psfKernel /= np.sum( psfKernel )
+        
         
         unalignedSum = np.sum( self.images, axis=0 )
         muDiff = np.mean( unalignedSum )
@@ -2353,26 +2369,26 @@ class ImageRegistrator(object):
         # unalignedCountsKeep = unalignedCounts[keepIndices]
         normalSigmaKeep = normalSigma[keepIndices]
     
-        lowerIndex = np.where( errorNormToCDF > -0.5 )[0][0]
-        upperIndex = np.where( errorNormToCDF < 0.5 )[0][-1]
-    
         # TODO: add try-except, using a fixed error difference if the fitting fails
-        try:
-            lowerA = np.array( [normalSigmaKeep[:lowerIndex], np.ones(lowerIndex )] )
-            
-            lowerFit = np.linalg.lstsq( lowerA.T, errorNormToCDF[:lowerIndex] )[0]
-            cutoffLower = np.float32( -lowerFit[1]/lowerFit[0] )
-        except:
-            print( "zorro.hotpixFilter failed to estimate bound for dead pixels, defaulting to -4.0" )
-            cutoffLower = np.float32( -4.0 )
-    
-        try:
-            upperA = np.array( [normalSigmaKeep[upperIndex:], np.ones( len(normalSigmaKeep) - upperIndex )] )
-            upperFit = np.linalg.lstsq( upperA.T, errorNormToCDF[upperIndex:] )[0]
-            cutoffUpper = np.float32( -upperFit[1]/upperFit[0] )
-        except:
-            print( "zorro.hotpixFilter failed to estimate bound for hot pixels, defaulting to +3.25" )
-            cutoffLower = np.float32( 3.25 )
+        if not bool(cutoffLower):
+            try:
+                lowerIndex = np.where( errorNormToCDF > -0.5 )[0][0]
+                lowerA = np.array( [normalSigmaKeep[:lowerIndex], np.ones(lowerIndex )] )
+                lowerFit = np.linalg.lstsq( lowerA.T, errorNormToCDF[:lowerIndex] )[0]
+                cutoffLower = np.float32( -lowerFit[1]/lowerFit[0] )
+            except:
+                print( "zorro.hotpixFilter failed to estimate bound for dead pixels, defaulting to -4.0" )
+                cutoffLower = np.float32( -4.0 )
+                
+        if not bool(cutoffUpper):
+            try:
+                upperIndex = np.where( errorNormToCDF < 0.5 )[0][-1]
+                upperA = np.array( [normalSigmaKeep[upperIndex:], np.ones( len(normalSigmaKeep) - upperIndex )] )
+                upperFit = np.linalg.lstsq( upperA.T, errorNormToCDF[upperIndex:] )[0]
+                cutoffUpper = np.float32( -upperFit[1]/upperFit[0] )
+            except:
+                print( "zorro.hotpixFilter failed to estimate bound for hot pixels, defaulting to +3.25" )
+                cutoffLower = np.float32( 3.25 )
             
         unalignedSigma = (unalignedSum - meanFromHist) * invStdFromHist
 
@@ -2387,13 +2403,20 @@ class ImageRegistrator(object):
         relax = np.float32( self.hotpixInfo[u'relax'] )
         logisticMask = nz.evaluate( "1.0 - 1.0 / ( (1.0 + exp(logK*(unalignedSigma-cutoffLower*relax)) ) )" )
         logisticMask = nz.evaluate( "logisticMask / ( (1.0 + exp(logK*(unalignedSigma-cutoffUpper*relax)) ) )" ).astype('float32')
-        convLogMask = np.float32(1.0) - logisticMask # For some reason numexpr is taking the 1.0 to be float64
+        UnityFloat32 = np.float32( 1.0 )
+        
         psfFiltMean = scipy.ndimage.convolve( unalignedSum/self.images.shape[0], psfKernel ).astype('float32')
         
+        if u"decorrOutliers" in self.hotpixInfo and self.hotpixInfo( u"decorrOutliers" ):
+            filtPositions = np.where( logisticMask > 0 )
+        
         stack = self.images
-        self.images = nz.evaluate( "convLogMask * psfFiltMean + logisticMask*stack" )
+        self.images = nz.evaluate( "(UnityFloat32-logisticMask) * psfFiltMean + logisticMask*stack" )
+        
+        # print( "DEBUG: hotpixFilter # nans %d" % np.sum(np.isnan(self.images) ) )
+        
         self.bench['hot1'] = time.time()
-        del logK, relax, logisticMask, psfFiltMean, stack, convLogMask
+        del logK, relax, logisticMask, psfFiltMean, stack, UnityFloat32
 
         
     def hotpixFilterOLD( self, hotpixSigma=3.5, gaussFilterSigma=4.0 ):
@@ -3069,17 +3092,23 @@ class ImageRegistrator(object):
                 self.saveConfig()
                 raise ValueError( "zorro.loadData: stacks must be 3D data" )
                 
-            self.images = tempData
+            if bool(self.gain) and not np.isclose( self.gain, 1.0 ):
+                self.images = tempData / self.gain
+            else:
+                self.images = tempData
+                
         elif target == u"sum" or target == u'imageSum':
             self.imageSum = tempData
             
             
         elif target == u"gainRef":
             # Apply flips and rotations
-            if ( ('Diagonal' in self.gainFlipsGatan and self.gainFlipsGatan['Diagonal'] and 
-                'Horizontal' in self.gainFlipsGatan and self.gainFlipsGatan['Horizontal'] ) or 
-                ('Diagonal' in self.gainFlipsGatan and self.gainFlipsGatan['Diagonal'] and 
-                'Vertical' in self.gainFlipsGatan and self.gainFlipsGatan['Vertical'] ) ):
+            if 'Diagonal' in self.gainFlipsGatan and self.gainFlipsGatan['Diagonal']:
+                print( "Rotating gain reference by 90 degrees" )
+                tempData = np.rot90( tempData, k = 1 )
+                
+            if 'Horizontal' in self.gainFlipsGatan and self.gainFlipsGatan['Horizontal'] and \
+                'Vertical' in self.gainFlipsGatan and  self.gainFlipsGatan['Vertical']:
                 # This is an image mirror, usually.
                 print( "Rotating gain reference by 180 degrees (mirror)" )
                 tempData = np.rot90( tempData, k =2 )
@@ -3137,7 +3166,7 @@ class ImageRegistrator(object):
         stackFront, stackExt = os.path.splitext( os.path.basename( self.files[u'stack'] ) )
         
         print( "DEBUG: Zorro compressor = %s" % self.files['compressor'] )
-        if self.files['compressor'] == None:
+        if not 'compressor' in self.files or not bool(self.files['compressor']):
             mrcExt = ".mrc"
             mrcsExt = ".mrcs"
         else:
@@ -3168,8 +3197,12 @@ class ImageRegistrator(object):
         #### SAVE ALIGNED SUM ####
         if self.verbose >= 1:
             print( "Saving: " + os.path.join(sumPath,sumFile) )
-        ioMRC.MRCExport( self.imageSum, os.path.join(sumPath,sumFile), pixelsize=self.pixelsize*10.0,
-                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
+        ioMRC.MRCExport( self.imageSum, os.path.join(sumPath,sumFile), 
+                        pixelsize=self.pixelsize,
+                        voltage = self.voltage, C3 = self.C3, gain = self.gain,
+                        compressor=self.files[u'compressor'], 
+                        cLevel=self.files[u'cLevel'], 
+                        n_threads=self.n_threads) 
 
         # Compress sum
         if bool(self.doCompression):
@@ -3189,8 +3222,12 @@ class ImageRegistrator(object):
             
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(alignPath,alignFile) )
-            ioMRC.MRCExport( self.images, os.path.join(alignPath,alignFile), pixelsize=self.pixelsize*10.0,
-                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
+            ioMRC.MRCExport( self.images, os.path.join(alignPath,alignFile), 
+                            pixelsize=self.pixelsize,
+                            voltage = self.voltage, C3 = self.C3, gain = self.gain,
+                            compressor=self.files[u'compressor'], 
+                            cLevel=self.files[u'cLevel'], 
+                            n_threads=self.n_threads) 
 
             # Compress stack
             if bool(self.doCompression):
@@ -3202,12 +3239,16 @@ class ImageRegistrator(object):
             
             filtPath, filtFile = os.path.split( self.files[u'filt'] )
             if not os.path.isabs( filtPath ):
-                filtPath = os.path.realpath( filtPath ) # sumPath is always real
+                filtPath = os.path.realpath( filtPath ) 
                 
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(filtPath, filtFile) )
-            ioMRC.MRCExport( self.filtSum, os.path.join(filtPath, filtFile), pixelsize=self.pixelsize*10.0,
-                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
+            ioMRC.MRCExport( self.filtSum, os.path.join(filtPath, filtFile), 
+                            pixelsize=self.pixelsize,
+                            voltage = self.voltage, C3 = self.C3, gain = self.gain,
+                            compressor=self.files[u'compressor'], 
+                            cLevel=self.files[u'cLevel'], 
+                            n_threads=self.n_threads) 
 
         #### SAVE CROSS-CORRELATIONS FOR FUTURE PROCESSING OR DISPLAY ####
         if self.saveC:
@@ -3215,8 +3256,13 @@ class ImageRegistrator(object):
             if self.verbose >= 1:
                 print( "Saving: " + self.files[u'xc'] )
                 
-            ioMRC.MRCExport( np.asarray( self.C, dtype='float32'), self.files[u'xc'], pixelsize=self.pixelsize*10.0,
-                        compressor=self.files[u'compressor'], cLevel=self.files[u'cLevel'], n_threads=self.n_threads) 
+            ioMRC.MRCExport( np.asarray( self.C, dtype='float32'), self.files[u'xc'], 
+                            pixelsize=self.pixelsize,
+                            voltage = self.voltage, C3 = self.C3, gain = self.gain,
+                            compressor=self.files[u'compressor'], 
+                            cLevel=self.files[u'cLevel'], 
+                            n_threads=self.n_threads) 
+                            
             if bool(self.doCompression):
                 util.compressFile( self.files[u'xc'], self.compress_ext, n_threads=self.n_threads )
             
@@ -3781,6 +3827,8 @@ class ImageRegistrator(object):
         if len(self.errorDictList) > 0 and u'pixRegError' in self.plotDict and bool( self.plotDict[u'pixRegError'] ):
             #print( "zorro.plot.PixRegError" )
             plotDict = self.plotDict.copy()
+            plotDict[u'errorX'] = self.errorDictList[0][u'errorX']
+            plotDict[u'errorY'] = self.errorDictList[0][u'errorY']
             plotDict[u'errorXY'] = self.errorDictList[0][u'errorXY']
             if bool(self.savePNG):
                 plotDict[u'plotFile'] = os.path.join( self.files[u'figurePath'], self.plotDict[u'title'] + "_pixRegError.png")
@@ -3983,7 +4031,11 @@ class ImageRegistrator(object):
         """ Go through and print out all the profile times in self.t """
         print( "----PROFILING TIMES----" )
         print( "    dtypes: float: %s, complex: %s" %(float_dtype, fftw_dtype) )
-        print( "    images.dtype: %s" % self.images.dtype )
+        if bool( np.any(self.filtSum) ):
+            print( "    images.dtype: %s, filtSum.dtype: %s" % (self.images.dtype, self.filtSum.dtype) )
+        else:
+            print( "    images.dtype: %s" % (self.images.dtype) )
+            
         if str(self.images.dtype) == 'float64':
             print( "    WARNING: running in double-precision (may be slow)" )
         print( "    Loading files (s): %.3f"%(self.bench['loaddata1'] - self.bench['loaddata0']) )

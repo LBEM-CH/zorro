@@ -32,9 +32,9 @@ BUFFERSIZE = 2**22 # Quite arbitrary, in bytes (hand-optimized)
 COMPRESSOR_ENUM = { 0:None, 1:'zlib', 2:'lz4', 3:'lz4hc', 4:'blosclz', 5:'zstd' }
 REVERSE_COMPRESSOR_ENUM = { None:0, 'zlib':1, 'lz4':2, 'lz4hc':3, 'blosclz':4, 'zstd':5 }
 
-IMOD_ENUM = { 0: 'u1', 1:'u2', 2:'f4', 4:'c8', 101:'u1' }
+IMOD_ENUM = { 0: 'i1', 1:'i2', 2:'f4', 4:'c8', 101:'u1' }
 EMAN2_ENUM = { 1: 'i1', 2:'u1', 3:'i2', 4:'u2', 5:'i4', 6:'u4', 7:'f4' }
-REVERSE_IMOD_ENUM = { 'uint8':0, 'u1':0, 'uint4':101, 'uint16':1, 'u2':1,
+REVERSE_IMOD_ENUM = { 'int8':0, 'i1':0, 'uint4':101, 'int16':1, 'i2':1,
                    'float64':2, 'f8':2, 'float32':2, 'f4':2,
                    'complex128':4, 'c16':4, 'complex64':4, 'c8':4 }
 
@@ -69,7 +69,7 @@ def defaultHeader( ):
     
 def MRCImport( MRCfilename, useMemmap = False, endian='le', 
               fileConvention = "imod", returnHeader = False,
-              n_threads = None ):
+              n_threads = None, reverseStripes=False ):
     """
     MRCImport( MRCfilename, useMemmap = False, endian='le', fileConvention = "default" )
     Created on Thu Apr 09 11:05:07 2015
@@ -107,18 +107,24 @@ def MRCImport( MRCfilename, useMemmap = False, endian='le',
         else:
             image = np.fromfile( f, dtype=header['dtype'], 
                                 count=np.product(header['dimensions']) )
-            
+                                
+        # print( "DEBUG 1: ioMRC.MRCImport # nans: %d" % np.sum(np.isnan(image)) )    
         if header['MRCtype'] == 101:
             # Seems the 4-bit is interlaced ...
             interlaced_image = image
             
             image = np.empty( np.product(header['dimensions']), dtype=header['dtype'] )
-            # Bit-shift and Bit-and to seperate decimated pixels
-            image[0::2] = np.left_shift(interlaced_image,4) / 15
-            image[1::2] = np.right_shift(interlaced_image,4)
+            if bool(reverseStripes):
+                # Bit-shift and Bit-and to seperate decimated pixels
+                image[1::2] = np.left_shift(interlaced_image,4) / 15
+                image[0::2] = np.right_shift(interlaced_image,4)
+            else: # Default
+                image[0::2] = np.left_shift(interlaced_image,4) / 15
+                image[1::2] = np.right_shift(interlaced_image,4)
 
+        # print( "DEBUG 2: ioMRC.MRCImport # nans: %d" % np.sum(np.isnan(image)) )
         image = np.squeeze( np.reshape( image, header['dimensions'] ) )
-
+        # print( "DEBUG 3: ioMRC.MRCImport # nans: %d" % np.sum(np.isnan(image)) )
         if returnHeader:
             return image, header
         else:
@@ -271,8 +277,8 @@ def readMRCHeader( MRCfilename, endian='le', fileConvention = "imod" ):
         
 def MRCExport( input_image, MRCfilename, endian='le', dtype=None, 
                pixelsize=[0.1,0.1,0.1], pixelunits=u"nm", shape=None, 
-               voltage = 300.0, C3 = 2.7, gain = 1.0,
-               compressor=None, cLevel = 1, n_threads=None, computeStats=True ):
+               voltage = 0.0, C3 = 0.0, gain = 1.0,
+               compressor=None, cLevel = 1, n_threads=None, quickStats=True ):
     """
     MRCExport( input_image, MRCfilename, endian='le', shape=None, compressor=None, cLevel = 1 )
     Created on Thu Apr 02 15:56:34 2015
@@ -307,6 +313,9 @@ def MRCExport( input_image, MRCfilename, endian='le', dtype=None,
         ratio will rise slowly with cLevel.
         
         n_threads is number of threads to use for blosc compression
+        
+        quickStats = True estimates the image mean, min, max from the first frame only,
+        which saves a lot of computational time for stacks.
     
     Note that MRC definitions are not consistent.  Generally we support the IMOD schema.
     """
@@ -322,6 +331,12 @@ def MRCExport( input_image, MRCfilename, endian='le', dtype=None,
     else:
         header['dtype'] = dtype
         
+    # Now we need to filter dtype to make sure it's actually acceptable to MRC
+    if header['dtype'] == 'float64' or 'f8' in header['dtype']:
+        header['dtype'] = 'f4'
+    if not header['dtype'].strip( "<>|" ) in IMOD_ENUM.values():
+        raise TypeError( "ioMRC.MRCExport: Unsupported dtype cast for MRC %s" % header['dtype'] )
+        
     header['dimensions'] = input_image.shape
     header['pixelsize'] = pixelsize
     header['pixelunits'] = pixelunits
@@ -329,15 +344,26 @@ def MRCExport( input_image, MRCfilename, endian='le', dtype=None,
     header['cLevel'] = cLevel
     header['shape'] = shape
     
-    # This overhead is annoying but many 3rd party tools that use MRC require these values.
-    if bool(computeStats):
+    # This overhead calculation is annoying but many 3rd party tools that use 
+    # MRC require these statistical parameters.
+    if bool(quickStats) and input_image.ndim == 3:
+        header['maxImage'] = np.max( input_image[0,:,:] )
+        header['minImage'] = np.min( input_image[0,:,:] )
+        header['maxImage'] = np.mean( input_image[0,:,:] )
+    else:
         header['maxImage'] = np.max( input_image )
         header['minImage'] = np.min( input_image )
         header['maxImage'] = np.mean( input_image )
     
     header['voltage'] = voltage
+    if not bool( header['voltage'] ):
+        header['voltage'] = 0.0
     header['C3'] = C3
+    if not bool( header['C3'] ):
+        header['C3'] = 0.0
     header['gain'] = gain
+    if not bool( header['gain'] ):
+        header['gain'] = 1.0
     
     header['compressor'] = compressor
     header['cLevel'] = cLevel
@@ -393,7 +419,12 @@ def __MRCExport( input_image, header, MRCfilename ):
             
             # Write file as uncompressed MRC
             f.seek(1024)
-            input_image.astype( header['dtype'] ).tofile(f)
+            # print( "ioMRC.MRCExport: nans: %d" % np.sum( np.isnan(input_image)))
+            input_image = input_image.astype( header['dtype'] )
+            
+            # print( "ioMRC.MRCExport: nans: %d" % np.sum( np.isnan(input_image)))
+            
+            input_image.tofile(f)
             
             # We have to rewind to header to insert 'packedBytes'
             # Get a header and write it to disk
@@ -473,6 +504,7 @@ def writeMRCHeader( f, header, endian='le' ):
         cellsize = [dimensions[0]*AApixelsize[1], dimensions[1]*AApixelsize[0], 100.0]
     else:
         cellsize = np.flipud(np.array( AApixelsize )) * np.array( dimensions )
+        
     np.array( cellsize, dtype=endchar+"f4" ).tofile(f)
     # Print default cell angles
     np.array( [90.0,90.0,90.0], dtype=endchar+"f4" ).tofile(f)

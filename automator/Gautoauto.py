@@ -17,8 +17,6 @@ import multiprocessing as mp
 import time
 import skimage.io
 
-__version__ = "0.1.0"
-
 ###### USER OPTIONS FOR Gautomatch ######
 # Benchmarking with bs-dw36: 24 physical cores Xeon(R) CPU E5-2680 v3 @ 2.50GHz, one GTX980 GPU
 # cina-haf02 (white computer) is probably of similar-speed
@@ -64,10 +62,8 @@ def runGauto( params ):
             if not bool(optRefine['thresCC']): optRefine['thresCC'] = 0.0
         pass
     
-        saveDiagnosticImages( mrcName, pngFrontName, optInit, optPlot, optRefine )
-        # Rename automatch boxes for conveniance.
-        mrcFront = os.path.splitext(mrcName)[0]
-        os.rename(  mrcFront + "_automatch.box", mrcFront + ".box" )
+        # saveDiagnosticImages( mrcName, pngFrontName, optInit, optPlot, optRefine )
+
     elif GautoMode == 'inspect':
         optPlot['write_pref_mic'] = True; optPlot['write_ccmax_mic'] = True; optPlot['write_bg_mic'] = True; 
         optPlot['write_bgfree_mic'] = True; optPlot['write_lsigma_mic'] = True; optPlot['write_mic_mask'] = True;
@@ -81,10 +77,10 @@ def runGauto( params ):
 
 def initRunGauto( mrcName, optInit, optPlot, optRefine ):
     try:
-        Gauto_exec = util.which( "Gautomatch" )
+        Gauto_exec = util.which( "gautomatch" )
     except:
         try:
-            Gauto_exec = util.which( "Gautomatch-v0.53_sm_20_cu7.0_x86_64" )
+            Gauto_exec = util.which( "Gautomatch-v0.53_sm_20_cu7.5_x86_64" )
         except:
             raise SystemError( "Gautomatch not found in system path" )
     devnull = open(os.devnull, 'w' )
@@ -211,8 +207,11 @@ def generateAlphaMask( maskName, boxes, boxWidth, goodnessMetric, optPlot ):
     Generate a PNG that is mostly transparent except for the boxes which are also high alpha.  To be 
     plotted on top of diagnostic images.
     """
+    # print( "optPlot['binning'] = %s, type: %s" % (str(optPlot['binning']),type(optPlot['binning']) ))
     binShape = np.array( optPlot['shapeOriginal']  ) / optPlot['binning']
-    boxes /= optPlot['binning']
+    
+    # print( "boxes: %s, type: %s" % (boxes, type(boxes)))
+    boxes = np.floor_divide( boxes, optPlot['binning'] )
     
     boxMask = np.zeros( [binShape[0], binShape[1], 4], dtype='float32' )
     # boxAlpha = 255*optPlot['boxAlpha']
@@ -274,16 +273,16 @@ def generatePNG( diagName, pngName, boxes, boxWidth, goodnessMetric, optPlot ):
     else:
         binning = 1
 
-    boxes /= binning
+    boxes = np.floor_divide( boxes, binning )
     print( "DEBUG: binning = " + str(binning) )
     # Cut off the edges where the images may be uneven
-    edge = optPlot['edge']/binning
+    edge = np.floor_divide( optPlot['edge'], binning )
     # Gautomatch ouputs 927 x 927, which is 3708 x 3708 binned by 4
     x_special = 0
     boxes[:,0] -= (edge + x_special)
     # TODO: why is Y-axis origin of boxes wierd???  Ah-ha!  Gautomatch is making every image rectangular!  
     # How to know this special value without loading original image?
-    y_special = (3838-3708) / (4*binning)
+    y_special = np.floor_divide( (3838-3708) , (4*binning) )
     boxes[:,1] += (edge + y_special)
     
     cropMage = Mage[edge:-edge,edge:-edge]
@@ -325,32 +324,6 @@ def generatePNG( diagName, pngName, boxes, boxWidth, goodnessMetric, optPlot ):
     skimage.io.imsave( pngName, cropMage  )
     # Remove the MRC
     os.remove( diagName )
-
-    
-    """
-    figsize = np.array( prefiltMage.shape ) / dpi * 2
-    fig1 = plt.figure( figsize=figsize )
-    clim = util.histClim( cropMage, 1.0E-3 )
-    plt.imshow( cropMage, vmin=clim[0], vmax=clim[1], interpolation='nearest' )
-    plt.set_cmap( 'gray' )
-    if np.any(boxes) and boxes.ndim == 1:
-        boxes[0:4] /= 4.0 # the prefMage is binned by 4 so apply same binning to first four colums of boxes
-        plt.plot( [boxes[0],boxes[0]+boxes[2],boxes[0]+boxes[2],boxes[0],boxes[0]], 
-                  [boxes[1],boxes[1],boxes[1]+boxes[3],boxes[1]+boxes[3],boxes[1]], 
-                  color=plt.cm.jet( boxes[4] ), alpha=0.5 )
-    elif boxes.ndim > 1:
-        boxes[:,0:4] /= 4.0 # the prefMage is binned by 4 so apply same binning to first four colums of boxes
-        for J in np.arange( boxes.shape[0] ):
-            plt.plot( [boxes[J,0],boxes[J,0]+boxes[J,2],boxes[J,0]+boxes[J,2],boxes[J,0], boxes[J,0]],
-                          [boxes[J,1],boxes[J,1],boxes[J,1]+boxes[J,3],boxes[J,1]+boxes[J,3], boxes[J,1]],
-                          color=plt.cm.jet( boxes[J,4] ), alpha=0.5 )
-    plt.xlim( [0, cropMage.shape[1]] )
-    plt.ylim( [0, cropMage.shape[0]] )
-    plt.axis( 'off' )
-    plt.title( mrcName )
-    plt.savefig( mrcFront + "_boxed.png", bbox_inches='tight', dpi=dpi )
-    plt.close(fig1)
-    """
     
     pass
 

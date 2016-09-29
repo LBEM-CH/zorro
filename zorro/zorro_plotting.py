@@ -272,22 +272,25 @@ class zorroPlot(object):
         self.axes2 = self.fig.add_subplot( 212 )
         self.axes2.hold(False)
         
+        weightedErrorX = np.abs( self.plotDict['errorX'] )
+        weightedErrorY = np.abs( self.plotDict['errorY'] )
+        
+        meanErrX = np.mean( weightedErrorX )
+        meanErrY = np.mean( weightedErrorY )
+        stdErrX = np.std( weightedErrorX )
+        stdErrY = np.std( weightedErrorY )
+        
         errorX = np.abs( self.plotDict['errorXY'][:,1] )
         errorY = np.abs( self.plotDict['errorXY'][:,0] )
         
-        meanErrX = np.mean( errorX )
-        meanErrY = np.mean( errorY )
-        stdErrX = np.std( errorX )
-        stdErrY = np.std( errorY)
-        
         self.axes.semilogy( errorX, '.:', linewidth=1.5, color='black', markersize=12, markerfacecolor='darkslateblue',
-                       label='X: %.3f +/- %.3f pix'%(meanErrX, stdErrX) )
+                       label='$\Delta$X: %.3f +/- %.3f pix'%(meanErrX, stdErrX) )
         self.axes.legend( fontsize=12, loc='best' )
         self.axes.set_ylabel( "X-error estimate (pix)" )
         
         # self.axes.set_title( 'X: %f +/- %f'%(meanErrX, stdErrX) )
         self.axes2.semilogy( errorY, '.:', linewidth=1.5, color='black', markersize=12, markerfacecolor='darkolivegreen',
-                        label='Y: %.3f +/- %.3f pix'%(meanErrY, stdErrY) )
+                        label='$\Delta$Y: %.3f +/- %.3f pix'%(meanErrY, stdErrY) )
         #self.axes2.set_title( 'Y: %f +/- %f pix'%(meanErrY, stdErrY) )
         self.axes2.legend( fontsize=12, loc='best' )
         self.axes2.set_xlabel( "Equation number" )
@@ -631,7 +634,8 @@ class ims(object):
             print( "shape of tupled array: " + str(self.im.shape) )
             # Don't even bother checking, the complex representation needs to be re-written anyway
             self.complex = False
-        elif self.im.ndim is 2:
+            
+        if self.im.ndim is 2:
             if np.iscomplex(self.im).any():
                 self.complex = True
                 self.im = np.array( [np.abs(self.im),np.angle(self.im)] )                
@@ -794,6 +798,7 @@ class ims(object):
         # RAM: this is a very expensive indicing operation...
         #rx = np.arange(rx_low,rx_high)[:,np.newaxis].astype( 'int32' )
 
+        self.posProfVert = np.round(self.frameShape[0]/2)
 
         ry_low = np.maximum( np.minimum(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
         ry_high = np.minimum( np.maximum(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])-1
@@ -825,7 +830,7 @@ class ims(object):
         self.ax.set_title( tit )
         self.ax.imshow(self.im2show[rx_low:rx_high,ry_low:ry_high], 
                        vmin=clim_min, vmax=clim_max, 
-                       interpolation='Nearest',
+                       interpolation='none',
                        norm=norm,
                        extent=[ry_low,ry_high,rx_low,rx_high], 
                         cmap=self.cmap )
@@ -888,7 +893,7 @@ class ims(object):
     def __exit__(self, event):
         print( "Exiting IMS" )
         self.exiting = True
-        sys.exit()
+        self.fig.close()
         
     def __call__(self, event):
         redraw = False
@@ -905,11 +910,11 @@ class ims(object):
             recompute = True
         if event.key=='N':#'up': #'right'
             if self.im.ndim > 2:        
-                self.index = np.minimum(self.im.shape[2]-1, self.index+10)
+                self.index = np.minimum(self.im.shape[0]-1, self.index+10)
             recompute = True
         elif event.key == 'P':#'down': #'left'
             if self.im.ndim > 2:        
-                self.inex = np.maximum(0, self.index-10)
+                self.index = np.maximum(0, self.index-10)
             recompute = True
         elif event.key == 'v':
             self.doTranspose = True
@@ -945,28 +950,28 @@ class ims(object):
             self.projType = event.key
             recompute = True
         elif event.key == 'i':
-            if 4*self.zoom < np.min(self.im.shape[:1]): # 2*zoom must not be bigger than shape/2
+            if 4*self.zoom < np.min(self.im.shape[1:]): # 2*zoom must not be bigger than shape/2
                 self.zoom = 2*self.zoom
             redraw = True
         elif event.key == 'o':
-            self.zoom = np.max(self.zoom/2,1)     
+            self.zoom = np.maximum(self.zoom/2,1)     
             redraw = True
             
         elif event.key == 'right':
             self.offy += self.stepXY
-            self.offy = np.min(self.offy,self.im.shape[0]-1)
+            self.offy = np.minimum(self.offy,self.im.shape[1]-1)
             redraw = True
         elif event.key == 'left':
             self.offy -= self.stepXY
-            self.offy = np.max(self.offy,-self.im.shape[0]+1)            
+            self.offy = np.maximum(self.offy,-self.im.shape[1]+1)            
             redraw = True
         elif event.key == 'down':
             self.offx += self.stepXY
-            self.offx = np.min(self.offx,self.im.shape[1]-1)    
+            self.offx = np.minimum(self.offx,self.im.shape[2]-1)    
             redraw = True
         elif event.key == 'up':
             self.offx -= self.stepXY
-            self.offx = np.max(self.offx,-self.im.shape[1]+1)
+            self.offx = np.maximum(self.offx,-self.im.shape[2]+1)
             redraw = True
         elif event.key == 'r': # reset position to the center of the image
             self.offx,self.offy = 0,0

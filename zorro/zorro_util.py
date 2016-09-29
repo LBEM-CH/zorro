@@ -501,7 +501,7 @@ def backgroundEstimate( input_image, fitType='gauss2', binFact=128, lpSigma=4.0 
     
     If the background is extremely weak (std < 1.0) then the fitting is ignored and just the mean value is reported.
     """
-    
+    print( "DEBUG:backgroundEst: input_image # nans %d" % np.sum(np.isnan(input_image) ) )
     # background fitting
     xcrop, ycrop = np.meshgrid( np.arange(0,input_image.shape[1], binFact), np.arange(0,input_image.shape[0], binFact) )
     nn_sum = interp2_nn( scipy.ndimage.gaussian_filter( input_image, lpSigma ), xcrop, ycrop )
@@ -515,7 +515,7 @@ def backgroundEstimate( input_image, fitType='gauss2', binFact=128, lpSigma=4.0 
     ymesh = ymesh[1:-2, 1:-2]
     nn_sum = nn_sum[1:-2, 1:-2]
 
-    # Maybe you need to add an x_c*y_c term?
+    # Maybe you need to add an x_c*y_c term?  On experimentation the cross-term doesn't help
     def gauss2( p, x_in, y_in ):
         x_c = x_in - p[1]
         y_c = y_in - p[2]
@@ -542,7 +542,9 @@ def backgroundEstimate( input_image, fitType='gauss2', binFact=128, lpSigma=4.0 
     yback /= binFact
 
     if fitGauss2D.success:
-        return gauss2( fitGauss2D.x, xback, yback )
+        back = gauss2( fitGauss2D.x, xback, yback )
+        print( "DEBUG:backgroundEst: back # nans %d" % np.sum(np.isnan(back) ) )
+        return back
     else: # Failure, have no effect
         print( "Background estimation failed" )
         return np.zeros_like( input_image )

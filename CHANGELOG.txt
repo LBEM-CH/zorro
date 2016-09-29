@@ -1,6 +1,25 @@
 CHANGELOG
 =======
 
+ZORRO 0.7.1b1
+=======
+
+* Fixed a bug in Automator that flipped MRC/MRCZ names.
+* Fixed a bug in IMS that was killing interactive Python scripts.
+* Added tooltips in Automator.
+* Fixed a bug in ioMRC that didn't cast double- to single-precision float
+* Fix to skulkHost where a job could exit and not have its status updated.
+* Added the ability to analyze the gain reference orientation under the menu
+  "Analyze"
+* Debugging output is now an option
+* Fixed bug where Automator would lose the reference between its configuration
+  dicts and its GUI elements.  
+* Additional delay (5 s) was inserted in-between the end of file changes and 
+  file syncing to facilitate slow MRC writing by SerialEM.
+* Automator now only shows the base filename, but the ToolTip shows the state 
+  and relative path.  Files that were previously synced are now lexicographically
+  sorted.
+
 ZORRO 0.7.1b0
 =======
 

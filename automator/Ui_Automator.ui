@@ -85,16 +85,7 @@ QFrame.SidebarInnerFrame
     <property name="spacing">
      <number>4</number>
     </property>
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
+    <property name="margin">
      <number>0</number>
     </property>
     <item>
@@ -122,16 +113,7 @@ QFrame.SidebarInnerFrame
        <enum>QFrame::Raised</enum>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
+       <property name="margin">
         <number>0</number>
        </property>
        <property name="spacing">
@@ -165,16 +147,7 @@ QFrame.SidebarInnerFrame
           <string/>
          </property>
          <layout class="QGridLayout" name="gridLayout_3">
-          <property name="leftMargin">
-           <number>2</number>
-          </property>
-          <property name="topMargin">
-           <number>2</number>
-          </property>
-          <property name="rightMargin">
-           <number>2</number>
-          </property>
-          <property name="bottomMargin">
+          <property name="margin">
            <number>2</number>
           </property>
           <property name="spacing">
@@ -192,16 +165,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -246,16 +210,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -283,16 +238,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -320,16 +266,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -357,16 +294,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -394,16 +322,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -510,16 +429,7 @@ QFrame.SidebarInnerFrame
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -561,16 +471,7 @@ QFrame.SidebarInnerFrame
                 <property name="spacing">
                  <number>3</number>
                 </property>
-                <property name="leftMargin">
-                 <number>3</number>
-                </property>
-                <property name="topMargin">
-                 <number>3</number>
-                </property>
-                <property name="rightMargin">
-                 <number>3</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>3</number>
                 </property>
                 <item>
@@ -615,16 +516,7 @@ color: white;
                 <property name="spacing">
                  <number>0</number>
                 </property>
-                <property name="leftMargin">
-                 <number>0</number>
-                </property>
-                <property name="topMargin">
-                 <number>0</number>
-                </property>
-                <property name="rightMargin">
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>0</number>
                 </property>
                 <item>
@@ -664,8 +556,8 @@ color: white;
                     <rect>
                      <x>0</x>
                      <y>0</y>
-                     <width>243</width>
-                     <height>327</height>
+                     <width>241</width>
+                     <height>352</height>
                     </rect>
                    </property>
                    <attribute name="label">
@@ -713,6 +605,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>The number of trailing frames to correlated each frame to.  Determines width of peaks signifcance matrix.</string>
+                      </property>
                       <property name="text">
                        <string>Diagonal width</string>
                       </property>
@@ -729,6 +624,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>The number of trailing frames to correlated each frame to.  Determines width of peaks signifcance matrix.</string>
+                      </property>
                       <property name="maximum">
                        <number>1024</number>
                       </property>
@@ -744,6 +642,9 @@ color: white;
                         <width>131</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to save the diagnostic PNG images.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -769,6 +670,9 @@ color: white;
                         <width>201</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to perform CTF estimation.  Working on the 'sum' is much faster than operating over all frames.</string>
                       </property>
                       <item>
                        <property name="text">
@@ -805,6 +709,9 @@ color: white;
                         <height>31</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Whether to perform CTF estimation.  Working on the 'sum' is much faster than operating over all frames.</string>
+                      </property>
                       <property name="text">
                        <string>CTF Tool </string>
                       </property>
@@ -820,6 +727,9 @@ color: white;
                         <width>171</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to save the aligned movie (in float-32 format) to disk, this can greatly increase storage consumption.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -845,6 +755,9 @@ color: white;
                         <width>201</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Which filters to apply.  See the wiki for detailed info.  All raw files saved as integers shot have 'hot' to suppress outlier pixels.</string>
                       </property>
                       <item>
                        <property name="text">
@@ -926,6 +839,9 @@ color: white;
                         <height>31</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Which filters to apply.  See the wiki for detailed info.  All raw files saved as integers shot have 'hot' to suppress outlier pixels.</string>
+                      </property>
                       <property name="text">
                        <string>Filter mode</string>
                       </property>
@@ -941,8 +857,8 @@ color: white;
                     <rect>
                      <x>0</x>
                      <y>0</y>
-                     <width>243</width>
-                     <height>327</height>
+                     <width>241</width>
+                     <height>352</height>
                     </rect>
                    </property>
                    <attribute name="label">
@@ -970,7 +886,7 @@ color: white;
                      <property name="geometry">
                       <rect>
                        <x>0</x>
-                       <y>-398</y>
+                       <y>0</y>
                        <width>206</width>
                        <height>800</height>
                       </rect>
@@ -989,6 +905,9 @@ color: white;
                         <width>71</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>How much zero-padding to apply in realspace to images.  Should be about 10-15 % bigger than the base image size, and a 'nice' FFT dimension (i.e. decomposable by of 2,3,5)</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1009,6 +928,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>How much zero-padding to apply in realspace to images.  Should be about 10-15 % bigger than the base image size, and a 'nice' FFT dimension (i.e. decomposable by of 2,3,5)</string>
+                      </property>
                       <property name="maximum">
                        <number>12000</number>
                       </property>
@@ -1027,6 +949,9 @@ color: white;
                         <width>71</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Distance to crop in Fourier space for cross-correlation.  Does not affect output file shape.  Smaller is faster, but throwing out atomic crystal contrast can negatively affect performance.</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1047,6 +972,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Distance to crop in Fourier space for cross-correlation.  Does not affect output file shape.  Smaller is faster, but throwing out atomic crystal contrast can negatively affect performance.</string>
+                      </property>
                       <property name="maximum">
                        <number>12000</number>
                       </property>
@@ -1066,6 +994,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Pixelsize is _only_ applied if the input image does not store it in the file.</string>
+                      </property>
                       <property name="text">
                        <string>Pixelsize</string>
                       </property>
@@ -1081,6 +1012,9 @@ color: white;
                         <width>81</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Pixelsize is _only_ applied if the input image does not store it in the file.</string>
                       </property>
                       <property name="decimals">
                        <number>3</number>
@@ -1179,7 +1113,7 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>0</x>
-                        <y>250</y>
+                        <y>280</y>
                         <width>211</width>
                         <height>5</height>
                        </rect>
@@ -1192,7 +1126,7 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>260</y>
+                        <y>300</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
@@ -1208,10 +1142,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>260</y>
+                        <y>300</y>
                         <width>69</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>The maximum shift within diagWidth frames (not over the entire stack).  For high-resolution work should be ~half lattice spacing and Preshift-True</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1229,6 +1166,9 @@ color: white;
                         <height>17</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>How much zero-padding to apply in realspace to images.  Should be about 10-15 % bigger than the base image size, and a 'nice' FFT dimension (i.e. decomposable by of 2,3,5)</string>
+                      </property>
                       <property name="text">
                        <string>Padded image shape</string>
                       </property>
@@ -1244,6 +1184,9 @@ color: white;
                         <width>141</width>
                         <height>17</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Distance to crop in Fourier space for cross-correlation.  Does not affect output file shape.  Smaller is faster, but throwing out atomic crystal contrast can negatively affect performance.</string>
                       </property>
                       <property name="text">
                        <string>Fourier crop shape</string>
@@ -1320,10 +1263,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>440</y>
+                        <y>470</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>How to filter the cross-correlations.  'opti' is per-correlation optimized to improve the peak significance, 'conv' and 'fourier' are fixed radius real-space and Fourier-space filters.</string>
                       </property>
                       <property name="text">
                        <string>Filter mode</string>
@@ -1336,10 +1282,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>440</y>
+                        <y>470</y>
                         <width>71</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>How to filter the cross-correlations.  'opti' is per-correlation optimized to improve the peak significance, 'conv' and 'fourier' are fixed radius real-space and Fourier-space filters.</string>
                       </property>
                       <item>
                        <property name="text">
@@ -1366,10 +1315,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>470</y>
+                        <y>500</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>For fixed radius filter modes ('conv' and 'fourier') the diameter in Fourier space in pixels to filter to.</string>
                       </property>
                       <property name="text">
                        <string>Filter rad (pix)</string>
@@ -1382,10 +1334,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>470</y>
+                        <y>500</y>
                         <width>69</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>For fixed radius filter modes ('conv' and 'fourier') the diameter in Fourier space in pixels to filter to.</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1398,10 +1353,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>500</y>
+                        <y>530</y>
                         <width>71</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Weighting scheme to apply to cross-correlations in solution solver for shifts.  'autologistic' is normal for cryoTEM, 'corr' is usually sufficient for high-resolution work.  See the wiki for more info.</string>
                       </property>
                       <item>
                        <property name="text">
@@ -1436,7 +1394,7 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>530</y>
+                        <y>560</y>
                         <width>71</width>
                         <height>27</height>
                        </rect>
@@ -1451,10 +1409,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>30</x>
-                        <y>380</y>
+                        <y>420</y>
                         <width>171</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Used for high-resolution alignment with a small maxshift.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -1473,10 +1434,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>500</y>
+                        <y>530</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Weighting scheme to apply to cross-correlations in solution solver for shifts.  'autologistic' is normal for cryoTEM, 'corr' is usually sufficient for high-resolution work.  See the wiki for more info.</string>
                       </property>
                       <property name="text">
                        <string>Weight mode</string>
@@ -1489,7 +1453,7 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>530</y>
+                        <y>560</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
@@ -1505,10 +1469,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>0</x>
-                        <y>560</y>
+                        <y>590</y>
                         <width>121</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Fraction of a pixel to estimate shifts to.</string>
                       </property>
                       <property name="text">
                        <string>Subpix precision</string>
@@ -1521,10 +1488,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>560</y>
+                        <y>590</y>
                         <width>69</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Fraction of a pixel to estimate shifts to.</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1537,10 +1507,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>0</x>
-                        <y>590</y>
+                        <y>620</y>
                         <width>121</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Subpixel shifting method, 'lanczos' is fastest and has fewer edge artifacts.  'None' will do integer shifts.</string>
                       </property>
                       <property name="text">
                        <string>Shift method</string>
@@ -1553,19 +1526,22 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>590</y>
+                        <y>620</y>
                         <width>71</width>
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Subpixel shifting method, 'lanczos' is fastest and has fewer edge artifacts.  'None' will do integer shifts.</string>
+                      </property>
                       <item>
                        <property name="text">
-                        <string>fourier</string>
+                        <string>lanczos</string>
                        </property>
                       </item>
                       <item>
                        <property name="text">
-                        <string>lanczos</string>
+                        <string>fourier</string>
                        </property>
                       </item>
                       <item>
@@ -1578,10 +1554,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>290</y>
+                        <y>330</y>
                         <width>101</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to center the drift by the centroid, or leave the translation of frame #0 at (0,0)</string>
                       </property>
                       <property name="text">
                        <string>Origin</string>
@@ -1594,10 +1573,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>110</x>
-                        <y>290</y>
+                        <y>330</y>
                         <width>91</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to center the drift by the centroid, or leave the translation of frame #0 at (0,0)</string>
                       </property>
                       <item>
                        <property name="text">
@@ -1614,10 +1596,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>0</x>
-                        <y>410</y>
+                        <y>440</y>
                         <width>201</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to save the cross-correlations in a *_xc.mrcs stack.  Useful for diagnosing problems.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -1636,10 +1621,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>620</y>
+                        <y>650</y>
                         <width>69</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>For align mode 'auto', the maximum 'diagWidth' to use.  Saves on computation.</string>
                       </property>
                       <property name="maximum">
                        <number>1024</number>
@@ -1652,10 +1640,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>620</y>
+                        <y>650</y>
                         <width>121</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>For align mode 'auto', the maximum 'diagWidth' to use.  Saves on computation.</string>
                       </property>
                       <property name="text">
                        <string>Auto max</string>
@@ -1668,10 +1659,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>320</y>
+                        <y>360</y>
                         <width>81</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>The upper triangular matrix scheme to employ.  'diag' is used for most cases, correlates each frame to 'diagWidth' neighbours.  See the wiki for detailed notes.  </string>
                       </property>
                       <property name="text">
                        <string>Align mode</string>
@@ -1684,10 +1678,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>0</x>
-                        <y>350</y>
+                        <y>390</y>
                         <width>131</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Only applicable for weightMode='logistic', sets the threshold level.</string>
                       </property>
                       <property name="text">
                        <string>Peak significance</string>
@@ -1700,10 +1697,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>90</x>
-                        <y>320</y>
+                        <y>360</y>
                         <width>111</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>The upper triangular matrix scheme to employ.  'diag' is used for most cases, correlates each frame to 'diagWidth' neighbours.  See the wiki for detailed notes.  </string>
                       </property>
                       <item>
                        <property name="text">
@@ -1735,10 +1735,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>130</x>
-                        <y>350</y>
+                        <y>390</y>
                         <width>69</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Only applicable for weightMode='logistic', sets the threshold level.</string>
                       </property>
                       <property name="singleStep">
                        <double>0.100000000000000</double>
@@ -1754,10 +1757,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>60</x>
-                        <y>650</y>
+                        <y>680</y>
                         <width>141</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to estimate the value of the origin in the cross-correlation by its neighbours.  Helps if gain reference is not perfect.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -1786,6 +1792,9 @@ color: white;
                         <width>71</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to apply binning prior to alignment, generally used for binning superresolution images.</string>
                       </property>
                       <property name="maximum">
                        <number>12000</number>
@@ -1825,6 +1834,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Whether to apply binning prior to alignment, generally used for binning superresolution images.</string>
+                      </property>
                       <property name="maximum">
                        <number>12000</number>
                       </property>
@@ -1860,6 +1872,9 @@ color: white;
                         <height>22</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Whether to apply binning prior to alignment, generally used for binning superresolution images.</string>
+                      </property>
                       <property name="text">
                        <string>Bin image</string>
                       </property>
@@ -1871,10 +1886,13 @@ color: white;
                       <property name="geometry">
                        <rect>
                         <x>10</x>
-                        <y>680</y>
+                        <y>710</y>
                         <width>191</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Whether to display debugging information, useful for giving more feedback to the developers.</string>
                       </property>
                       <property name="layoutDirection">
                        <enum>Qt::RightToLeft</enum>
@@ -1901,6 +1919,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Zorro uses 'nm' internally, but MRC files are saved in Angstroms.</string>
+                      </property>
                       <item>
                        <property name="text">
                         <string>nm</string>
@@ -1922,6 +1943,47 @@ color: white;
                        </property>
                       </item>
                      </widget>
+                     <widget class="QDoubleSpinBox" name="sbGain">
+                      <property name="geometry">
+                       <rect>
+                        <x>130</x>
+                        <y>250</y>
+                        <width>69</width>
+                        <height>27</height>
+                       </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Scaling factor applied to data after loading.  So if the detector has a gain of 100 counts/electron, enter said value.</string>
+                      </property>
+                      <property name="decimals">
+                       <number>3</number>
+                      </property>
+                      <property name="maximum">
+                       <double>9999.989999999999782</double>
+                      </property>
+                      <property name="value">
+                       <double>1.000000000000000</double>
+                      </property>
+                     </widget>
+                     <widget class="QLabel" name="label_30">
+                      <property name="geometry">
+                       <rect>
+                        <x>10</x>
+                        <y>250</y>
+                        <width>111</width>
+                        <height>27</height>
+                       </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Scaling factor applied to data after loading.  So if the detector has a gain of 100 counts/electron, enter said value.</string>
+                      </property>
+                      <property name="text">
+                       <string>Gain</string>
+                      </property>
+                      <property name="alignment">
+                       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                      </property>
+                     </widget>
                     </widget>
                    </widget>
                   </widget>
@@ -1930,8 +1992,8 @@ color: white;
                     <rect>
                      <x>0</x>
                      <y>0</y>
-                     <width>98</width>
-                     <height>28</height>
+                     <width>241</width>
+                     <height>352</height>
                     </rect>
                    </property>
                    <attribute name="label">
@@ -1973,6 +2035,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Automator can submit jobs to the computer it is running on ('local') or use 'qsub' on a cluster with a Sun Grid Engine (or close equivalent).</string>
+                      </property>
                       <property name="text">
                        <string>Cluster type</string>
                       </property>
@@ -1988,6 +2053,9 @@ color: white;
                         <width>111</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Automator can submit jobs to the computer it is running on ('local') or use 'qsub' on a cluster with a Sun Grid Engine (or close equivalent).</string>
                       </property>
                       <item>
                        <property name="text">
@@ -2025,6 +2093,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Number of threads for each Zorro process should use.</string>
+                      </property>
                       <property name="maximum">
                        <number>512</number>
                       </property>
@@ -2041,6 +2112,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>How much effort to plan various FFT shapes.  FFTW_MEASURE is usually best but FFTW_ESTIMATE can be useful if this step stalls.</string>
+                      </property>
                       <property name="text">
                        <string>FFTW Effort</string>
                       </property>
@@ -2056,6 +2130,9 @@ color: white;
                         <width>121</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>How much effort to plan various FFT shapes.  FFTW_MEASURE is usually best but FFTW_ESTIMATE can be useful if this step stalls.</string>
                       </property>
                       <item>
                        <property name="text">
@@ -2098,6 +2175,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Number of Zorro processes to run simultaneously.  For 'qsub' clusters, this is the maximum number of jobs to submit simultaneously.</string>
+                      </property>
                       <property name="maximum">
                        <number>512</number>
                       </property>
@@ -2114,6 +2194,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>Can point to a fast swap space (RAMdisk or SSD) for writing temporary files.  Primarily used for auxiliary programs (CTF/particle picking).</string>
+                      </property>
                       <property name="text">
                        <string>Cache Path</string>
                       </property>
@@ -2129,6 +2212,9 @@ color: white;
                         <width>171</width>
                         <height>30</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Can point to a fast swap space (RAMdisk or SSD) for writing temporary files.  Primarily used for auxiliary programs (CTF/particle picking).</string>
                       </property>
                      </widget>
                      <widget class="QToolButton" name="tbOpenCachePath">
@@ -2212,6 +2298,9 @@ color: white;
                         <height>30</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>When using a 'qsub' cluster type you should point to a stub that can be filled-out to submit jobs within your environment.  See the wiki for examples.</string>
+                      </property>
                      </widget>
                      <widget class="QLabel" name="label_48">
                       <property name="geometry">
@@ -2221,6 +2310,9 @@ color: white;
                         <width>131</width>
                         <height>27</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>When using a 'qsub' cluster type you should point to a stub that can be filled-out to submit jobs within your environment.  See the wiki for examples.</string>
                       </property>
                       <property name="text">
                        <string>Qsub Header File</string>
@@ -2237,6 +2329,9 @@ color: white;
                         <width>131</width>
                         <height>17</height>
                        </rect>
+                      </property>
+                      <property name="toolTip">
+                       <string>Multiprocessing plots can save ~20 s per stack, but on some OSes it may result in some broken plots.  </string>
                       </property>
                       <property name="text">
                        <string>Multiprocess plots</string>
@@ -2267,6 +2362,9 @@ color: white;
                         <height>27</height>
                        </rect>
                       </property>
+                      <property name="toolTip">
+                       <string>The number of files to rsync simultaneously.  </string>
+                      </property>
                       <property name="maximum">
                        <number>512</number>
                       </property>
@@ -2282,8 +2380,8 @@ color: white;
                     <rect>
                      <x>0</x>
                      <y>0</y>
-                     <width>98</width>
-                     <height>28</height>
+                     <width>241</width>
+                     <height>352</height>
                     </rect>
                    </property>
                    <attribute name="label">
@@ -2923,16 +3021,7 @@ color: white;
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -2968,16 +3057,7 @@ color: white;
                 <property name="spacing">
                  <number>3</number>
                 </property>
-                <property name="leftMargin">
-                 <number>3</number>
-                </property>
-                <property name="topMargin">
-                 <number>3</number>
-                </property>
-                <property name="rightMargin">
-                 <number>3</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>3</number>
                 </property>
                 <item>
@@ -3022,16 +3102,7 @@ color: white;
                 <property name="spacing">
                  <number>0</number>
                 </property>
-                <property name="leftMargin">
-                 <number>0</number>
-                </property>
-                <property name="topMargin">
-                 <number>0</number>
-                </property>
-                <property name="rightMargin">
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>0</number>
                 </property>
                 <item>
@@ -3047,6 +3118,12 @@ color: white;
                     <width>0</width>
                     <height>0</height>
                    </size>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <family>Monospace</family>
+                    <pointsize>9</pointsize>
+                   </font>
                   </property>
                   <property name="verticalScrollBarPolicy">
                    <enum>Qt::ScrollBarAlwaysOn</enum>
@@ -3104,16 +3181,7 @@ color: white;
              <property name="spacing">
               <number>0</number>
              </property>
-             <property name="leftMargin">
-              <number>0</number>
-             </property>
-             <property name="topMargin">
-              <number>0</number>
-             </property>
-             <property name="rightMargin">
-              <number>0</number>
-             </property>
-             <property name="bottomMargin">
+             <property name="margin">
               <number>0</number>
              </property>
              <item>
@@ -3149,16 +3217,7 @@ color: white;
                 <property name="spacing">
                  <number>3</number>
                 </property>
-                <property name="leftMargin">
-                 <number>3</number>
-                </property>
-                <property name="topMargin">
-                 <number>3</number>
-                </property>
-                <property name="rightMargin">
-                 <number>3</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>3</number>
                 </property>
                 <item>
@@ -3218,16 +3277,7 @@ color: white;
                 <string>SidebarInnerFrame</string>
                </property>
                <layout class="QGridLayout" name="gridLayout_7">
-                <property name="leftMargin">
-                 <number>3</number>
-                </property>
-                <property name="topMargin">
-                 <number>3</number>
-                </property>
-                <property name="rightMargin">
-                 <number>3</number>
-                </property>
-                <property name="bottomMargin">
+                <property name="margin">
                  <number>3</number>
                 </property>
                 <property name="spacing">
@@ -3445,7 +3495,7 @@ color: white;
      <x>0</x>
      <y>0</y>
      <width>1920</width>
-     <height>25</height>
+     <height>19</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -3484,8 +3534,15 @@ color: white;
     </widget>
     <addaction name="menuPreferred_popout"/>
    </widget>
+   <widget class="QMenu" name="menuAnalysis">
+    <property name="title">
+     <string>Analysis</string>
+    </property>
+    <addaction name="actionOrient_Gain_Reference"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuOptions"/>
+   <addaction name="menuAnalysis"/>
    <addaction name="menuDisplay"/>
    <addaction name="menuHelp"/>
   </widget>
@@ -3574,6 +3631,11 @@ color: white;
    </property>
    <property name="text">
     <string>Automator</string>
+   </property>
+  </action>
+  <action name="actionOrient_Gain_Reference">
+   <property name="text">
+    <string>Orient Gain Reference</string>
    </property>
   </action>
  </widget>

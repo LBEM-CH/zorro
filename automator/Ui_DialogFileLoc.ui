@@ -42,18 +42,24 @@ font-weight: bold;
     <enum>QFrame::Raised</enum>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="24" column="0">
-     <widget class="QLabel" name="label_9">
+    <item row="12" column="0">
+     <widget class="QLabel" name="label_2">
+      <property name="toolTip">
+       <string>Subdirectory inside the working directory where Zorro logs and standard output will be saved.</string>
+      </property>
       <property name="text">
-       <string>Gain reference (for SerialEM)</string>
+       <string>Logs subdirectory path:</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
       </property>
      </widget>
     </item>
-    <item row="15" column="0">
-     <widget class="QLineEdit" name="leRawPath">
+    <item row="13" column="0">
+     <widget class="QLineEdit" name="leOutputPath">
+      <property name="toolTip">
+       <string>Subdirectory inside the working directory where Zorro logs and standard output will be saved.</string>
+      </property>
       <property name="styleSheet">
        <string notr="true">background: gray;
 color: black;</string>
@@ -63,14 +69,100 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="7" column="1">
-     <widget class="Line" name="line">
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_8">
+      <property name="toolTip">
+       <string>The directory to watch for new *.mrc, *.dm4, *.tif, and *.hdf5 files for processing.  Moves _all_ files in this directory.</string>
+      </property>
+      <property name="text">
+       <string>Input directory path:</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+      </property>
+     </widget>
+    </item>
+    <item row="16" column="0">
+     <widget class="QLabel" name="label_3">
+      <property name="toolTip">
+       <string>Where to save the *zorro.mrc aligned stack sums.</string>
+      </property>
+      <property name="text">
+       <string>Aligned sums subdirectory:                          </string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+      </property>
+     </widget>
+    </item>
+    <item row="20" column="0">
+     <widget class="QLabel" name="label_4">
+      <property name="toolTip">
+       <string>Where to save the zorro_movie.mrcs aligned movie files (can be the same as sums).</string>
+      </property>
+      <property name="text">
+       <string>Aligned stacks subdirectory:</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLineEdit" name="leInputPath">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="toolTip">
+       <string>The directory to watch for new *.mrc, *.dm4, *.tif, and *.hdf5 files for processing.  Moves _all_ files in this directory.</string>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background: gray;
+color: black;</string>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="0">
+     <widget class="Line" name="line_2">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
-    <item row="25" column="2">
+    <item row="21" column="0">
+     <widget class="QLineEdit" name="leAlignPath">
+      <property name="toolTip">
+       <string>Where to save the zorro_movie.mrcs aligned movie files (can be the same as sums).</string>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background: gray;
+color: black;</string>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="22" column="0">
+     <widget class="QLabel" name="label_6">
+      <property name="toolTip">
+       <string>Where to save the diagnostic PNG plots.</string>
+      </property>
+      <property name="text">
+       <string>Figures subdirectory:</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+      </property>
+     </widget>
+    </item>
+    <item row="26" column="3">
      <widget class="QToolButton" name="tbOpenGainRefPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -100,51 +192,17 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="22" column="0">
-     <widget class="QLabel" name="label_6">
-      <property name="text">
-       <string>Output figures subdirectory</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
-      </property>
-     </widget>
-    </item>
-    <item row="21" column="0">
-     <widget class="QLineEdit" name="leAlignPath">
-      <property name="styleSheet">
-       <string notr="true">background: gray;
-color: black;</string>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item row="12" column="0">
-     <widget class="QLabel" name="label_2">
-      <property name="text">
-       <string>Logs subdirectory path</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
-      </property>
-     </widget>
-    </item>
-    <item row="11" column="0">
-     <widget class="Line" name="line_2">
+    <item row="7" column="2">
+     <widget class="Line" name="line">
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
-    <item row="3" column="0">
-     <widget class="QLineEdit" name="leInputPath">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
+    <item row="15" column="0">
+     <widget class="QLineEdit" name="leRawPath">
+      <property name="toolTip">
+       <string>Where to move all raw files (from input) to.</string>
       </property>
       <property name="styleSheet">
        <string notr="true">background: gray;
@@ -155,37 +213,17 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="20" column="0">
-     <widget class="QLabel" name="label_4">
+    <item row="25" column="0">
+     <widget class="QLabel" name="label_9">
       <property name="text">
-       <string>Aligned stacks subdirectory</string>
+       <string>Gain reference (for SerialEM):</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
       </property>
      </widget>
     </item>
-    <item row="16" column="0">
-     <widget class="QLabel" name="label_3">
-      <property name="text">
-       <string>Aligned sums subdirectory                                       </string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="0">
-     <widget class="QLabel" name="label_8">
-      <property name="text">
-       <string>Input directory path</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
-      </property>
-     </widget>
-    </item>
-    <item row="15" column="2">
+    <item row="15" column="3">
      <widget class="QToolButton" name="tbOpenRawPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -215,7 +253,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="25" column="0">
+    <item row="26" column="0">
      <widget class="QLineEdit" name="leGainRefPath">
       <property name="enabled">
        <bool>true</bool>
@@ -229,18 +267,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="13" column="0">
-     <widget class="QLineEdit" name="leOutputPath">
-      <property name="styleSheet">
-       <string notr="true">background: gray;
-color: black;</string>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-     </widget>
-    </item>
-    <item row="23" column="2">
+    <item row="23" column="3">
      <widget class="QToolButton" name="tbOpenFiguresPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -270,7 +297,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="18" column="2">
+    <item row="18" column="3">
      <widget class="QToolButton" name="tbOpenSumPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -300,7 +327,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="21" column="2">
+    <item row="21" column="3">
      <widget class="QToolButton" name="tbOpenAlignPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -330,7 +357,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="13" column="2">
+    <item row="13" column="3">
      <widget class="QToolButton" name="tbOpenOutputPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -362,8 +389,11 @@ color: black;</string>
     </item>
     <item row="14" column="0">
      <widget class="QLabel" name="label_5">
+      <property name="toolTip">
+       <string>Where to move all raw files (from input) to.</string>
+      </property>
       <property name="text">
-       <string>Raw stacks subdirectory</string>
+       <string>Raw stacks subdirectory:</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
@@ -375,6 +405,9 @@ color: black;</string>
       <property name="enabled">
        <bool>true</bool>
       </property>
+      <property name="toolTip">
+       <string>Where to save the diagnostic PNG plots.</string>
+      </property>
       <property name="styleSheet">
        <string notr="true">background: gray;
 color: black;</string>
@@ -384,7 +417,7 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="3" column="2">
+    <item row="3" column="3">
      <widget class="QToolButton" name="tbOpenInputPath">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -416,6 +449,9 @@ color: black;</string>
     </item>
     <item row="18" column="0">
      <widget class="QLineEdit" name="leSumPath">
+      <property name="toolTip">
+       <string>Where to save the *zorro.mrc aligned stack sums.</string>
+      </property>
       <property name="styleSheet">
        <string notr="true">background: gray;
 color: black;</string>
@@ -425,13 +461,16 @@ color: black;</string>
       </property>
      </widget>
     </item>
-    <item row="26" column="0">
+    <item row="27" column="0">
      <widget class="QFrame" name="frame_2">
       <property name="frameShape">
-       <enum>QFrame::StyledPanel</enum>
+       <enum>QFrame::NoFrame</enum>
       </property>
       <property name="frameShadow">
-       <enum>QFrame::Raised</enum>
+       <enum>QFrame::Plain</enum>
+      </property>
+      <property name="lineWidth">
+       <number>1</number>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <property name="leftMargin">
@@ -449,7 +488,7 @@ color: black;</string>
        <item>
         <widget class="QLabel" name="label">
          <property name="text">
-          <string>Compression</string>
+          <string>Compression:</string>
          </property>
         </widget>
        </item>
@@ -492,7 +531,7 @@ color:black;
        <item>
         <widget class="QLabel" name="label_10">
          <property name="text">
-          <string>Level</string>
+          <string>Level:</string>
          </property>
         </widget>
        </item>
@@ -515,6 +554,58 @@ color:black;
         </widget>
        </item>
       </layout>
+     </widget>
+    </item>
+    <item row="28" column="0">
+     <widget class="QFrame" name="horizontalFrame">
+      <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QCheckBox" name="cbGainRot">
+         <property name="text">
+          <string>Rotation</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="cbGainHorzFlip">
+         <property name="text">
+          <string>Horizontal Flip</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="cbGainVertFlip">
+         <property name="text">
+          <string>Vertical Flip</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="24" column="0">
+     <widget class="Line" name="line_3">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
      </widget>
     </item>
    </layout>

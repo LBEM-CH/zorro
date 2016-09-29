@@ -80,7 +80,7 @@ import time
 major_ver = 0
 minor_ver = 7
 nano_ver = 1
-branch = 'b0'
+branch = 'b1'
 
 version = "%d.%d.%d%s" % (major_ver, minor_ver, nano_ver, branch)
 
@@ -304,5 +304,5 @@ if __name__ == '__main__':
     t0 = time.time()
     setup_zorro()
     t1 = time.time()
-    print( "Completed: Zorro build/install time (s): " + str(t1-t0) )
+    print( "Completed: Zorro build/install time (s): %.3f" % (t1-t0) )
 

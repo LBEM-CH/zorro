@@ -257,6 +257,8 @@ class MplCanvas(FigureCanvas,object):
     
     def livePixRegError( self ):
         try:
+            self.plotObj.plotDict['errorX'] = self._zorroObj.errorDictList[0]['errorX']
+            self.plotObj.plotDict['errorY'] = self._zorroObj.errorDictList[0]['errorY']
             self.plotObj.plotDict['errorXY'] = self._zorroObj.errorDictList[0]['errorXY']
             self.currPlotFunc = self.plotObj.plotPixRegError
         except:

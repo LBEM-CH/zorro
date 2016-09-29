@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'Ui_ViewWidget.ui'
 #
-# Created: Wed Sep 21 13:03:12 2016
+# Created: Thu Sep 29 11:15:15 2016
 #      by: pyside-uic 0.2.15 running on PySide 1.2.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -52,8 +52,8 @@ class Ui_ViewWidget(object):
         self.tbLive.setStyleSheet("")
         self.tbLive.setText("")
         icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap("icons/monitor-dead.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         icon1.addPixmap(QtGui.QPixmap("icons/monitor-live.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
+        icon1.addPixmap(QtGui.QPixmap("icons/monitor-dead.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.tbLive.setIcon(icon1)
         self.tbLive.setCheckable(True)
         self.tbLive.setChecked(True)
