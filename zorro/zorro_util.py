@@ -761,12 +761,12 @@ def guessCfgType( value ):
     return value
 
 def weightedErrorNorm( x, A, b, weights ):
-    # Typically weight by R**2.0, where R is the maximum value from the cross-correlation
-    return np.sum( weights * (np.dot( A, x) - b)**2.0 )
+    # weighted error to set of shifts
+    return np.sum( weights * np.abs(np.dot( A, x) - b) )
     
 def errorNorm( x, A, b ):
     # No damping
-    return np.sum( (np.dot( A, x) - b)**2.0 )
+    return np.sum( np.abs(np.dot( A, x) - b) )
     
 # Fit a logistical curve to the sigmoid... and use that as the weighting curve???
 def logistic( peaksAxis, SigmaThres, K, Nu):

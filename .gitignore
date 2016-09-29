@@ -1,0 +1,11 @@
+dist
+build
+.eggs
+zorro.egg-info
+zorro.wiki
+*.bash
+*.bat
+*.pyc
+MPLCANVAS_FEATURES.txt
+manylinux_wheel.py
+

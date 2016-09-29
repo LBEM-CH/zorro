@@ -1096,7 +1096,8 @@ class ImageRegistrator(object):
         except: pass
         pass
                         
-    def shiftsSolver( self, shiftsTriMat_in, corrTriMat_in, peaksigTriMat_in, acceptedEqns=None, mode='basin', Niter=100 ):
+    def shiftsSolver( self, shiftsTriMat_in, corrTriMat_in, peaksigTriMat_in, 
+                     acceptedEqns=None, mode='basin', Niter=100 ):
         """
         Functional minimization optimization of the triangular correlation matrix
         
@@ -2407,7 +2408,7 @@ class ImageRegistrator(object):
         
         psfFiltMean = scipy.ndimage.convolve( unalignedSum/self.images.shape[0], psfKernel ).astype('float32')
         
-        if u"decorrOutliers" in self.hotpixInfo and self.hotpixInfo( u"decorrOutliers" ):
+        if u"decorrOutliers" in self.hotpixInfo and self.hotpixInfo[ u"decorrOutliers" ]:
             filtPositions = np.where( logisticMask > 0 )
         
         stack = self.images

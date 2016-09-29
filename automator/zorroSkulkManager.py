@@ -1692,9 +1692,7 @@ class skulkManager(QtCore.QThread):
         if len( logList ) == 0:
             return
             
-        print( logList )
-        logList.sort()
-        print( logList )
+        logList = np.sort(logList)
         
         # Prioritize by lexigraphic sort
         for J, log in enumerate(logList):
