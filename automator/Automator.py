@@ -872,20 +872,23 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         if command == 'shapeBin':
             self.zorroDefault.shapeBinned = [self.sbBinCropY.value(), self.sbBinCropX.value()]
             
-    def updateDict( self, dicthandle, key, funchandle, funcarg = None ):
+    def updateDict( self, dictHandle, key, funchandle, funcarg = None ):
         
         # This is not mydict, this is a copy of mydict!  Ergh...
-        if type(dicthandle) == str or ( sys.version.major == 2 and type(dicthandle) == unicode): 
-            dicthandle = self.__getattribute__( dicthandle )
+
+        if type(dictHandle) == str or ( sys.version.major == 2 and type(dictHandle) == unicode): 
+            parts = dictHandle.split('.')
+            partHandle = self
+            for part in parts:
+                partHandle = getattr( partHandle, part )
+            dictHandle = partHandle
         
-        dicthandle[key] = funchandle()
+        dictHandle[key] = funchandle()
         if key == u"DEBUG":
             self.skulk.setDEBUG( self.cbDebuggingOutput.isChecked() )
             
         if self.skulk.DEBUG:
-            print( "updateDict: [ %s ] : %s " % (key, dicthandle[key] ) )
-            print( dicthandle )
-            print( self.cfgCluster )
+            print( "updateDict: [ %s ] : %s " % (key, dictHandle[key] ) )
             
         #if key == u'n_threads':
         #    for hostName, hostObj in self.skulk.procHosts:
