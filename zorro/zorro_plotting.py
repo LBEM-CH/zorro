@@ -23,6 +23,7 @@ import matplotlib.colors as col
 import scipy.ndimage as ni
 import zorro
 import os, os.path, sys
+import mrcz
 
 ##################################################################################
 ######################## Object-oriented interface ###############################
@@ -588,9 +589,11 @@ class ims(object):
         self.filterMode = False
         self.__gaussSigma = 1.5
         self.doTranspose = False
+        self.filename = None
+        self.titles = titles
         self.__currTitle = ""
         self.__sigmaLevels = np.hstack( [np.array( [0.01, 0.02, 0.04, 0.06, 0.08]), 
-                                                  np.arange( 0.1, 10.1, 0.1 )])
+                                                  np.arange( 0.1, 20.1, 0.1 )])
         self.__sigmaIndex = 31 # 3.0 sigma by default
         self.blocking = blocking
         
@@ -598,11 +601,12 @@ class ims(object):
         
         if sys.version_info >= (3,0):
             if isinstance( self.im, str ):
+                self.titles = self.im
                 print( "Try to load MRC or DM4 files" )
                 file_ext = os.path.splitext( self.im )[1]
                 if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
                     file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
-                    self.im, self.header = zorro.ioMRC.MRCImport( self.im, returnHeader=True )
+                    self.im, self.header = mrcz.MRCImport( self.im, returnHeader=True )
                 elif file_ext.lower() == ".dm4":
                     dm4struct = zorro.ioDM.DM4Import( self.im )
                     self.im = dm4struct.im[1].imageData
@@ -617,9 +621,9 @@ class ims(object):
                 file_ext = os.path.splitext( self.im )[1]
                 if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
                     file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
-                    self.im, self.header = zorro.ioMRC.MRCImport( self.im, returnHeader=True )
+                    self.im, self.header = mrcz.MRCImport( self.im, returnHeader=True )
                 elif file_ext.lower() == ".dm4":
-                    dm4struct = zorro.ioDM.DM4Import( self.im )
+                    dm4struct = mrcz.DM4Import( self.im )
                     self.im = dm4struct.im[1].imageData
                     self.header = dm4struct.im[1].imageInfo
                     del dm4struct
@@ -638,14 +642,17 @@ class ims(object):
         if self.im.ndim is 2:
             if np.iscomplex(self.im).any():
                 self.complex = True
-                self.im = np.array( [np.abs(self.im),np.angle(self.im)] )                
+                self.im = np.array( [np.hypot( np.real(self.im), np.imag(self.im)),np.angle(self.im)] )      
+                print( "DEBUG: complex self.im.shape = %s" % str(self.im.shape) )
+                self.__imCount = 2
+                self.frameShape = self.im.shape[1:]
             else:                
                 self.complex = False
             self.frameShape = self.im.shape
             self.__imCount = 1
         elif self.im.ndim is 3:
             if np.iscomplex( self.im ).any():
-                self.im = np.abs(self.im)
+                self.im = np.hypot( np.real(self.im), np.imag(self.im) )
             self.complex = False
             self.frameShape = self.im.shape[1:]
             self.__imCount = self.im.shape[0]
@@ -659,7 +666,6 @@ class ims(object):
         print( "IMS self.im.shape = %s" % str(self.im.shape) )
             
         self.dtype = self.im.dtype
-        self.titles = titles
         
             
         
@@ -678,6 +684,7 @@ class ims(object):
             self.ax = self.fig.add_subplot(111)
         else:
             self.fig = plt.figure(figsize=(10,10)) 
+
             self.ax = self.fig.axes
             self.__setaxes__()
 
@@ -686,7 +693,9 @@ class ims(object):
         self.__recompute__()
         self.fig.canvas.mpl_connect('key_press_event',self.__call__ )
         self.fig.canvas.mpl_connect( 'close_event', self.__exit__ )
+
         plt.show( block=self.blocking )
+        
         # plt.ion()
         
     def __setaxes__(self):
@@ -719,7 +728,7 @@ class ims(object):
         self.posProfVert = np.round(self.frameShape[1]/2)
             
     def __recompute__(self):
-        
+        self.__currTitle = ""
         if self.doTranspose:
             self.doTranspose = False
             self.im = np.transpose( self.im, axes=[2,0,1] )
@@ -727,13 +736,8 @@ class ims(object):
             self.__setaxes__()
             
         if self.im.ndim is 2:
-            self.__currTitle = self.titles[0]
             self.im2show = self.im
         elif self.im.ndim is 3:
-            if len(self.titles) == self.im.shape[0]:
-                self.__currTitle = self.titles[self.index]
-            else:
-                self.__currTitle = self.titles[0]
                 
             self.im2show = np.squeeze( self.im[self.index,...] )
             self.__currTitle = 'frame %d/%d' % (self.index, self.im.shape[0]-1)
@@ -778,31 +782,41 @@ class ims(object):
             self.__stdList[self.index] = np.std( self.im2show )
         else:
             self.__minList[self.index] = np.min( self.im2show )
-            self.__maxList[self.index] = np.min( self.im2show )
+            self.__maxList[self.index] = np.max( self.im2show )
         self.__draw__()
             
     def __draw__(self):
-        print( "Called ims.draw()" )
+        # print( "Called ims.draw()" )
         plt.cla()
         
         tit = self.__currTitle + ""
         if self.zoom > 1:
             tit += ', zoom %g x'%(self.zoom)
             
-            
-        hx,hy = self.frameShape[0]/2., self.frameShape[1]/2.
-        lx,ly = hx/(self.zoom),hy/(self.zoom)
+        center_y = np.int( self.frameShape[0]/2 )
+        center_x = np.int( self.frameShape[1]/2 )
+        halfWidth_y = np.int( 0.5* self.frameShape[0]/self.zoom )
+        halfWidth_x = np.int( 0.5* self.frameShape[1]/self.zoom )
 
-        rx_low = np.maximum( np.minimum(np.floor(hx) + self.offx - np.floor(lx),self.frameShape[0]-self.stepXY),0.0)
-        rx_high = np.minimum(np.maximum(np.floor(hx) + self.offx + np.ceil(lx),self.stepXY),self.frameShape[0])-1
+        im_range = [ np.maximum( 0, center_y-halfWidth_y), 
+                     np.minimum( self.frameShape[0], center_y+halfWidth_y ),
+                     np.maximum( 0, center_x-halfWidth_x), 
+                     np.minimum( self.frameShape[1], center_x+halfWidth_x ) ]
+        
+        #hx,hy = self.frameShape[0]/2., self.frameShape[1]/2.
+        #lx,ly = hx/(self.zoom),hy/(self.zoom)
+
+        #rx_low = np.maximum( np.minimum(np.floor(hx) + self.offx - np.floor(lx),self.frameShape[0]-self.stepXY),0.0)
+        #rx_high = np.minimum(np.maximum(np.floor(hx) + self.offx + np.ceil(lx),self.stepXY),self.frameShape[0])-1
         # RAM: this is a very expensive indicing operation...
         #rx = np.arange(rx_low,rx_high)[:,np.newaxis].astype( 'int32' )
 
-        self.posProfVert = np.round(self.frameShape[0]/2)
+        #self.posProfVert = np.round(self.frameShape[0]/2)
 
-        ry_low = np.maximum( np.minimum(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
-        ry_high = np.minimum( np.maximum(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])-1
+        #ry_low = np.maximum( np.minimum(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
+        #ry_high = np.minimum( np.maximum(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])-1
         #ry = np.arange(ry_low,ry_high).astype( 'int32' )
+    
 
         if self.sigmaMode:
             
@@ -828,13 +842,17 @@ class ims(object):
         norm = None
         
         self.ax.set_title( tit )
-        self.ax.imshow(self.im2show[rx_low:rx_high,ry_low:ry_high], 
+        self.ax.imshow(self.im2show[ im_range[0]:im_range[1], im_range[2]:im_range[3 ]], 
                        vmin=clim_min, vmax=clim_max, 
                        interpolation='none',
                        norm=norm,
-                       extent=[ry_low,ry_high,rx_low,rx_high], 
+                       extent=im_range, 
                         cmap=self.cmap )
         # plt.colorbar(self.ax)
+                        
+        # RAM: This format_coord function is amazingly sensitive to minor changes and often breaks
+        # the whole class.
+        # DO NOT TOUCH format_coord!!!! 
         def format_coord(x, y):
             x = np.int(x + 0.5)
             y = np.int(y + 0.5)
@@ -843,7 +861,18 @@ class ims(object):
                 return "%.5G @ [%4i, %4i]" % (self.im2show[y, x], y, x) #first shown coordinate is vertical, second is horizontal
             except IndexError:
                 return ""
+            
         self.ax.format_coord = format_coord
+        # DO NOT TOUCH format_coord!!!! 
+        
+        if isinstance(self.titles, (list,tuple)) and len(self.titles) > 0:
+            try:
+                self.fig.canvas.set_window_title(self.titles[self.index])
+            except: 
+                self.fig.canvas.set_window_title(self.titles[0])
+        elif isinstance( self.titles, str ):
+            self.fig.canvas.set_window_title(self.titles)
+                
         if 'qt' in plt.matplotlib.get_backend().lower():
             self.fig.canvas.manager.window.raise_() #this pops the window to the top    
         # TODO: X-Y profiles
@@ -898,7 +927,7 @@ class ims(object):
     def __call__(self, event):
         redraw = False
         recompute = False
-        print( "Received key press %s" % event.key )
+        # print( "Received key press %s" % event.key )
 
         if event.key=='n':#'up': #'right'
             if self.im.ndim > 2:
@@ -920,16 +949,16 @@ class ims(object):
             self.doTranspose = True
             recompute = True
         elif event.key == 'l':
-            self.logMode = ~ self.logMode       
+            self.logMode = not  self.logMode       
             recompute = True
         elif event.key == 'c':
             self.cmap = next( self.cmaps_cycle)
             redraw = True
         elif event.key == 'h':
-            self.sigmaMode = ~self.sigmaMode
+            self.sigmaMode = not self.sigmaMode
             redraw = True
         elif event.key == 'g':
-            self.filterMode = ~self.filterMode
+            self.filterMode = not self.filterMode
             recompute = True
         elif event.key == 'k':
             self.__gaussSigma /= 1.5
@@ -940,13 +969,13 @@ class ims(object):
             if self.filterMode:
                 recompute = True
         elif event.key == 'F': # FFT
-            self.fftMode = ~self.fftMode
+            self.fftMode = not self.fftMode
             recompute = True
         elif event.key == 'y': # polar (cYlindrical)
-            self.polarMode = ~self.polarMode            
+            self.polarMode = not self.polarMode            
             recompute = True
         elif event.key in 'SMV':
-            self.projToggle = ~self.projToggle
+            self.projToggle = not self.projToggle
             self.projType = event.key
             recompute = True
         elif event.key == 'i':
@@ -958,16 +987,16 @@ class ims(object):
             redraw = True
             
         elif event.key == 'right':
-            self.offy += self.stepXY
-            self.offy = np.minimum(self.offy,self.im.shape[1]-1)
+            self.offx += self.stepXY
+            self.offx = np.minimum(self.offx,self.im.shape[1]-1)
             redraw = True
         elif event.key == 'left':
-            self.offy -= self.stepXY
-            self.offy = np.maximum(self.offy,-self.im.shape[1]+1)            
+            self.offx -= self.stepXY
+            self.offx = np.maximum(self.offy,-self.im.shape[1]+1)            
             redraw = True
         elif event.key == 'down':
-            self.offx += self.stepXY
-            self.offx = np.minimum(self.offx,self.im.shape[2]-1)    
+            self.offy += self.stepXY
+            self.offy = np.minimum(self.offx,self.im.shape[2]-1)    
             redraw = True
         elif event.key == 'up':
             self.offx -= self.stepXY
@@ -985,13 +1014,13 @@ class ims(object):
             self.__sigmaIndex = np.maximum( self.__sigmaIndex-1, 0 )
             redraw = True
         elif event.key == 'Q': # increase contrast quickly
-            self.__sigmaIndex = np.maximum( self.__sigmaIndex-5, 0 )
+            self.__sigmaIndex = np.maximum( self.__sigmaIndex-10, 0 )
             redraw = True
         elif event.key == 'w': # decrease contrast
-            self.__sigmaIndex = np.minimum( self.__sigmaIndex+1, self.__sigmaLevels.size )
+            self.__sigmaIndex = np.minimum( self.__sigmaIndex+1, self.__sigmaLevels.size-1 )
             redraw = True
         elif event.key == 'W': # decrease contrast quickly
-            self.__sigmaIndex = np.minimum( self.__sigmaIndex+5, self.__sigmaLevels.size )
+            self.__sigmaIndex = np.minimum( self.__sigmaIndex+10, self.__sigmaLevels.size-1 )
             redraw = True
 #            print "Increasing upper limit of the contrast: %g %% (press R to reset).\n"%round(self.offVmax*100)
         elif event.key == 'T': # print statistics of the whole dataset
@@ -1000,8 +1029,11 @@ class ims(object):
         elif event.key == 't': # print statistics of the current frame
             self.printStat(mode = 'curr'),                      
             redraw = False
-
-        # Recompute is dominate over draw
+        else:
+            # Apparently we get multiple key-press events so don't do any error handling here.
+            pass
+            
+        # Recompute is dominant over draw
         if recompute:
             self.__recompute__()
         elif redraw:

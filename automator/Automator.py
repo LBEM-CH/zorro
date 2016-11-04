@@ -58,10 +58,6 @@ import numpy as np
 #progversion = u"0.7.1b0"
 from .__version__ import __version__
 
-extensionlist = ['*.dm4', '*.dm3', '*.mrc', "*.mrcz", '*.mrcs', "*.mrcsz", '*.hdf5', '*.h5', 
-                 '*.dm4.bz2', '*.dm3.bz2', '*.mrc.bz2', '*.mrcs.bz2', '*.hdf5.bz2', '*.h5.bz2', 
-                 '*.dm4.gz', '*.dm3.gz', '*.mrc.gz', '*.mrcs.gz', '*.hdf5.gz', '*.h5.gz']
-
 #STATE_COLORS = { NEW:u'darkorange', CHANGING:u'darkorange', STABLE:u'goldenrod', SYNCING:u'goldenrod', READY:u'forestgreen',
 #                PROCESSING:u'forestgreen', FINISHED:u'indigo', ARCHIVING:u'saddlebrown', COMPLETE:u'dimgrey', 
 #                STALE:u'firebrick', HOST_BUSY:u'host_busy', HOST_FREE:u'host_free', HOST_ERROR:u'firebrick', 
@@ -75,11 +71,11 @@ TOOLTIP_STATUS = { u'darkorange':u'New', u'goldenrod':u'Stable', u'indigo':u'Fin
 #class Automator(Ui_Automator_ui, QtGui.QApplication):
 class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
     
-    def __init__(self):
+    def __init__(self, testing=False ):
         # Hack to get icons to show up...
         # Better approach would be to give each one the real path.
         # origdir = os.path.realpath('.')
-    
+        
         
         # os.chdir( os.path.dirname(os.path.realpath(__file__)) )
         QtGui.QApplication.__init__(self, sys.argv)
@@ -110,8 +106,10 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         # Connect skulk.automatorSignal to myself
         self.skulk.automatorSignal.connect( self.updateFromSkulk )
         self.skulkThread = None
-
+        
+        self.cfgfilename = ""
         self.initClusterConfig()
+        
         # I should populate these with the default values from QtDesigner
         self.cfgCommon = {}
         self.cfgGauto = {}
@@ -188,11 +186,11 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         self.ui_FileLocDialog.comboCompressor.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u'files.compressor', self.ui_FileLocDialog.comboCompressor.currentText ) )
         self.ui_FileLocDialog.cbGainRot.stateChanged.connect( functools.partial( 
-            self.updateZorroDefault, u'gainFlipsGatan.Diagonal', self.ui_FileLocDialog.cbGainRot.isChecked ) )
+            self.updateZorroDefault, u'gainInfo.Diagonal', self.ui_FileLocDialog.cbGainRot.isChecked ) )
         self.ui_FileLocDialog.cbGainHorzFlip.stateChanged.connect( functools.partial( 
-            self.updateZorroDefault, u'gainFlipsGatan.Horizontal', self.ui_FileLocDialog.cbGainHorzFlip.isChecked ) )
+            self.updateZorroDefault, u'gainInfo.Horizontal', self.ui_FileLocDialog.cbGainHorzFlip.isChecked ) )
         self.ui_FileLocDialog.cbGainVertFlip.stateChanged.connect( functools.partial( 
-            self.updateZorroDefault, u'gainFlipsGatan.Vertical', self.ui_FileLocDialog.cbGainVertFlip.isChecked ) )
+            self.updateZorroDefault, u'gainInfo.Vertical', self.ui_FileLocDialog.cbGainVertFlip.isChecked ) )
         
         self.ui_OrienGainRefDialog.tbOrientGain_GainRef.clicked.connect( functools.partial( 
             self.openFileDialog, u'OrientGain_GainRef', True ) )
@@ -227,7 +225,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 #        self.sbEndFrame.valueChanged.connect( functools.partial( 
 #            self.updateZorroDefault, "endFrame", self.sbEndFrame.value ) )    
         self.sbDiagWidth.valueChanged.connect( functools.partial( 
-            self.updateZorroDefault, u"diagWidth", self.sbDiagWidth.value ) )        
+            self.updateZorroDefault, u"diagWidth", self.sbDiagWidth.value ) )     
+        
         self.sbAutomax.valueChanged.connect( functools.partial( 
             self.updateZorroDefault, u"autoMax", self.sbAutomax.value ) )    
         self.cbSuppressOrigin.stateChanged.connect( functools.partial( 
@@ -238,6 +237,8 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             self.updateZorroDefault, u"filterMode", self.comboFilterMode.currentText ) ) 
         self.cbSaveMovie.stateChanged.connect( functools.partial( 
             self.updateZorroDefault, u"saveMovie", self.cbSaveMovie.isChecked ) )  
+        self.comboAlignProgram.currentIndexChanged.connect( functools.partial( 
+            self.updateZorroDefault, u"xcorrMode", self.comboAlignProgram.currentText ) )  
         self.comboCtfProgram.currentIndexChanged.connect( functools.partial( 
             self.updateZorroDefault, u"CTFProgram", self.comboCtfProgram.currentText ) )  
      
@@ -411,14 +412,17 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
 #                print( "Using default Zorro parameters" )
             
         # Check for auxiliary programs
-        self.validateAuxTools()
+        if not bool(testing):
+            self.validateAuxTools()
+            
         # Setup preferred popout function
         self.preferPopout()
         
         self.skulk.inspectLogDir() # Let's see if we can run this once...
         
-        self.MainWindow.showMaximized()
-        self.exec_()
+        if not bool(testing):
+            self.MainWindow.showMaximized()
+            self.exec_()
         
         
     
@@ -619,7 +623,6 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         fullName = name
         baseName = os.path.basename( name )
         
-        print( "DEBUG: fullName: %s, baseName: %s" % (fullName, baseName) )
         
         if command == 'rename':
             if self.skulk.DEBUG:
@@ -872,18 +875,18 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         if command == 'shapeBin':
             self.zorroDefault.shapeBinned = [self.sbBinCropY.value(), self.sbBinCropX.value()]
             
-    def updateDict( self, dictHandle, key, funchandle, funcarg = None ):
+    def updateDict( self, dictHandle, key, funcHandle, funcarg = None ):
         
         # This is not mydict, this is a copy of mydict!  Ergh...
 
-        if type(dictHandle) == str or ( sys.version.major == 2 and type(dictHandle) == unicode): 
+        if type(dictHandle) == str or ( sys.version_info.major == 2 and type(dictHandle) == unicode): 
             parts = dictHandle.split('.')
             partHandle = self
             for part in parts:
                 partHandle = getattr( partHandle, part )
             dictHandle = partHandle
         
-        dictHandle[key] = funchandle()
+        dictHandle[key] = funcHandle()
         if key == u"DEBUG":
             self.skulk.setDEBUG( self.cbDebuggingOutput.isChecked() )
             
@@ -892,7 +895,7 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
             
         #if key == u'n_threads':
         #    for hostName, hostObj in self.skulk.procHosts:
-        #        hostObj.n_threads = funchandle()
+        #        hostObj.n_threads = funcHandle()
         #    pass
         
         
@@ -959,6 +962,11 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
     def quitApp( self, event = None ):
         print( "Shutting down: " + str(event) )
         self.killSkulk()
+        
+        # Try and save config if it was saved previously in the CWD
+        if self.cfgfilename in os.listdir('.'):
+            self.saveConfig( self.cfgfilename )
+        
         self.MainWindow.close()
         self.FileLocDialog.close()
         self.exit() 
@@ -1059,11 +1067,11 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         except: pass
         try:
             self.ui_FileLocDialog.cbGainHorzFlip.setChecked( 
-                self.zorroDefault.gainFlipsGatan['Horizontal'])
+                self.zorroDefault.gainInfo['Horizontal'])
             self.ui_FileLocDialog.cbGainVertFlip.setChecked( 
-                self.zorroDefault.gainFlipsGatan['Vertical'])
+                self.zorroDefault.gainInfo['Vertical'])
             self.ui_FileLocDialog.cbGainRot.setChecked( 
-                self.zorroDefault.gainFlipsGatan['Diagonal'])
+                self.zorroDefault.gainInfo['Diagonal'])
         except: pass
         try: 
             self.ui_FileLocDialog.sbCLevel.setValue( int(self.zorroDefault.files['cLevel']) )
@@ -1290,7 +1298,9 @@ class Automator(Ui_Automator.Ui_Automator_ui, QtGui.QApplication):
         else:
             # Force extension to .ini
             cfgfilename = os.path.splitext( cfgfilename )[0] + ".ini"
-            self.cfgfilename = cfgfilename
+        
+        
+        self.cfgfilename = cfgfilename
             
         self.statusbar.showMessage( "Saving configuration: " + cfgfilename )
         self.cfgCommon[u"version"] = __version__

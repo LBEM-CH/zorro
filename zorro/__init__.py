@@ -13,8 +13,6 @@ from __future__ import (division, absolute_import, print_function)
 
 from .zorro import (ImageRegistrator,)
 from .__main__ import main
-from . import ioMRC
-from . import ioDM
 from . import zorro_util as util
 from . import zorro_plotting as plot
 

@@ -79,8 +79,8 @@ import time
 
 major_ver = 0
 minor_ver = 7
-nano_ver = 1
-branch = 'b2'
+nano_ver = 2
+branch = 'b0'
 
 version = "%d.%d.%d%s" % (major_ver, minor_ver, nano_ver, branch)
 
@@ -176,7 +176,7 @@ def setup_zorro():
                             'Topic :: Scientific/Engineering :: Image Recognition',
                     
                             # Pick your license as you wish (should match "license" above)
-                            'License :: OSI Approved :: MIT License',
+                            'License :: OSI Approved :: BSD License',
                     
                             # Specify the Python versions you support here. In particular, ensure
                             # that you indicate whether you support Python 2, Python 3 or both.

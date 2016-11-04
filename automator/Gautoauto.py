@@ -8,7 +8,8 @@ Created on Tue Apr 12 10:25:42 2016
 @author: Robert A. McLeod
 @email: robert.mcleod@unibas.ch
 """
-from zorro import ioMRC, util
+from zorro import util
+import mrcz
 import numpy as np
 import matplotlib.pyplot as plt
 import os, os.path, glob
@@ -123,7 +124,7 @@ def refineRunGauto( mrcName, optInit, optPlot, optRefine ):
     devnull = open(os.devnull, 'w' )
     
     ccMaxName = os.path.splitext( mrcName )[0] + "_ccmax.mrc"
-    ccMax = ioMRC.MRCImport( ccMaxName )
+    ccMax = mrcz.MRCImport( ccMaxName )
         
     pdfCC, hX = np.histogram( ccMax[optPlot['edge']:-optPlot['edge'],optPlot['edge']:-optPlot['edge']], bins=512 )
     pdfCC = pdfCC.astype('float32');    hX = hX[:-1]
@@ -261,7 +262,7 @@ def generatePNG( diagName, pngName, boxes, boxWidth, goodnessMetric, optPlot ):
         print( "File not found: %s"%diagName )
         return
           
-    Mage = ioMRC.MRCImport( diagName )
+    Mage = mrcz.MRCImport( diagName )
     if Mage.shape[0] <= 512:
         binning = 8
     elif Mage.shape[0] <= 682:

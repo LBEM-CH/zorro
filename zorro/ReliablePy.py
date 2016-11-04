@@ -34,6 +34,7 @@ Note that all Relion strings are byte-strings (char1) rather than UTF encoded.
 from __future__ import division, print_function, absolute_import
 
 from . import zorro
+import mrcz
 import matplotlib.pyplot as plt
 import numpy as np
 import os, os.path
@@ -264,7 +265,7 @@ class ReliablePy(object):
         rethres = gaussThres > gaussRethres; rethres = rethres.astype('float32')
         
         self.mask = scipy.ndimage.gaussian_filter( rethres, smoothSigma )
-        print( "permissive mask complete, use ioMRC.MRCexport(self.mrc, 'maskname.mrc') to save" )
+        print( "permissive mask complete, use mrcz.MRCexport(self.mrc, 'maskname.mrc') to save" )
         pass
     
     def box2star( self, directory = "." ):
@@ -329,12 +330,18 @@ class ReliablePy(object):
         DefocusU = self.star[b'data_'][b'DefocusU']
         DefocusV = self.star[b'data_'][b'DefocusV']
         DefocusMean = 0.5* (DefocusU + DefocusV)
-        part_GroupScaleCorrection = np.zeros_like( self.star[b'data_'][b'DefocusU'] )
         
-        # Build a GroupScaleCorrection vector
-        for J, groupNr in enumerate( self.star[b'data_'][b'GroupNumber'] ):
-            part_GroupScaleCorrection[J] = self.star[b'data_model_groups'][b'GroupScaleCorrection'][  np.argwhere(self.star[b'data_model_groups'][b'GroupNumber'] == groupNr)[0] ]
+        if b'data_model_groups' in self.star:
+            SCALE_CORR_PRESENT = True
+            part_GroupScaleCorrection = np.zeros_like( self.star[b'data_'][b'DefocusU'] )
         
+            # Build a GroupScaleCorrection vector
+            for J, groupNr in enumerate( self.star[b'data_'][b'GroupNumber'] ):
+                part_GroupScaleCorrection[J] = self.star[b'data_model_groups'][b'GroupScaleCorrection'][  np.argwhere(self.star[b'data_model_groups'][b'GroupNumber'] == groupNr)[0] ]
+        else:
+            print( "No _model.star loaded, not using scale correction" )
+            SCALE_CORR_PRESENT = False
+            
         ##################
         # K-means clustering:
         ##################
@@ -346,7 +353,10 @@ class ReliablePy(object):
         else: 
             k_means = sklearn.cluster.KMeans( n_clusters=n_clusters, n_jobs=12 )
         #Kmeans_in = np.vstack( [DefocusMean, part_GroupScaleCorrection]).transpose()
-        Kmeans_in = np.vstack( [DefocusU,DefocusV, part_GroupScaleCorrection]).transpose()
+        if SCALE_CORR_PRESENT:
+            Kmeans_in = np.vstack( [DefocusU,DefocusV, part_GroupScaleCorrection]).transpose()
+        else:
+            Kmeans_in = np.vstack( [DefocusU,DefocusV]).transpose()
         Kmeans_in = sklearn.preprocessing.robust_scale( Kmeans_in )
         k_predict = k_means.fit_predict( Kmeans_in  )
         t1 = time.time()
@@ -486,7 +496,7 @@ class ReliablePy(object):
         
         particleList = []
         for uniqueName in uniqueNames:
-            particleList.extend( zorro.ioMRC.MRCImport(uniqueName) )
+            particleList.extend( mrcz.MRCImport(uniqueName) )
             
         print( "DONE building particle list!" )
         print( len(particleList) )
@@ -495,7 +505,7 @@ class ReliablePy(object):
         del particleList
         
         # We do have the shape parameter that we can pass in to pre-pad the array with all zeros.
-        zorro.ioMRC.MRCExport( particleArray, mrcName, shape=None )
+        mrcz.MRCExport( particleArray, mrcName, shape=None )
         pass
         
     def saveCtfImagesStar( self, outputName, zorroList = "*.dm4.log", physicalPixelSize=5.0, amplitudeContrast=0.08 ):
@@ -726,7 +736,7 @@ class ReliablePy(object):
                                 pass
 
     def __loadMRC( self, mrcname ):
-        mrcimage, mrcheader  = zorro.ioMRC.MRCImport( mrcname, returnHeader=True )
+        mrcimage, mrcheader  = mrcz.MRCImport( mrcname, returnHeader=True )
         self.mrc.append( mrcimage )
         self.mrc_header.append( mrcheader )
         

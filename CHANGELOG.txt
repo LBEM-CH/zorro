@@ -1,6 +1,27 @@
 CHANGELOG
 =======
 
+ZORRO 0.7.2
+======
+
+* Initial implementation of testing module. These are in general slow tests, 
+  as the majority problems in Zorro only manifest under load in my experience.
+* Config file is now autosaved on exit if it was last loaded/saved from the 
+  working directory.  Otherwise the assumption is it's a template loaded from 
+  elsewhere and should not be modified.  
+* Fixed a bug in reprocessing, where it deleted the log which is no longer a 
+  necessary step.
+* Changed default library for TIFF to Pillow as it has the fastest performance 
+  for compressed TIFF.
+* Improved outlier pixel handling when neighbouring pixels are outliers.
+* Warning in zorro_util.rotmean regarding non-integer indexing has been dealt 
+  with.  Same for zorro_util.img2polar
+* File IO now requires the external package 'mrcz'.  Install it as 
+
+   pip install mrcz
+   
+* Changed license for Zorro from MIT to BSD 2-clause.
+
 ZORRO 0.7.1b1
 =======
 

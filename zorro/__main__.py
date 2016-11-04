@@ -24,7 +24,6 @@ def main():
     # Usage: 
     # python `which zorro.py` -i Test.dm4 -c default.ini -o test.mrc
     stackReg = zorro.ImageRegistrator()
-    stackReg.bench['total0'] = time.time() 
     configFile = None
     inputFile = None
     outputFile = None
@@ -53,10 +52,12 @@ def main():
         sys.exit()
     if inputFile == None and not configFile == None:
         stackReg.loadConfig( configNameIn=configFile, loadData = True )
+        stackReg.bench['total0'] = time.time() 
         
     if not inputFile == None and not configFile == None:
         stackReg.loadConfig( configNameIn=configFile, loadData = False )
-
+        stackReg.bench['total0'] = time.time() 
+        
         stackReg.files['stack'] = inputFile
         stackReg.loadData()
         
@@ -65,8 +66,26 @@ def main():
         
     # Force use of 'Agg' for matplotlib.  It's slower than Qt4Agg but doesn't crash on the cluster
     stackReg.plotDict['backend'] = 'Agg'
-    # Execute the alignment
-    stackReg.alignImageStack()
+    
+    if stackReg.triMode == 'refine':
+        # In the case of 'refine' we have to call 'diag' first if it hasn't already 
+        # been performde.
+        if not bool(stackReg.errorDictList[-1]) and np.any( stackReg.imageSum != None ):
+            # Assume that 
+            print( "Zorro refine assuming that initial alignment has already been performed." )
+            pass
+        else:
+            print( "Zorro refine performing initial alignment." )
+            stackReg.triMode = 'diag'
+            stackReg.alignImageStack()
+            stackReg.loadData() # Only re-loads the stack
+        stackReg.triMode = 'refine'
+        # TODO: enable subZorro refinment.
+        stackReg.alignImageStack()
+
+    else:
+        # Execute the alignment as called for Zorro/UnBlur/etc.
+        stackReg.alignImageStack()
     
     # Save everthing and do rounding/compression operations
     stackReg.saveData() # Can be None 
@@ -75,7 +94,6 @@ def main():
     if stackReg.savePNG:
         stackReg.plot()
     
-    stackReg.bench['total1'] = time.time() 
     stackReg.printProfileTimes()
     
     stackReg.METAstatus = 'fini'

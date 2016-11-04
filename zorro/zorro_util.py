@@ -170,7 +170,7 @@ def rotmean( mage ):
         rotmean.prevN = N
         rotmean.prevM = M
         
-        rotmean.rmax = np.ceil( np.sqrt( N**2 + M**2 ) ) + 1
+        rotmean.rmax = np.int( np.ceil( np.sqrt( N**2 + M**2 ) ) + 1 )
         [xmesh, ymesh] = np.meshgrid( np.arange(-N, N), np.arange(-M, M) )
         rmesh = np.sqrt( xmesh**2 + ymesh**2 )
         rotmean.rfloor = np.floor( rmesh )
@@ -213,6 +213,7 @@ def rotmean( mage ):
     
     # Add one to indexing array and add positive remainders to next-neighbours in sum
     #rmean[ (rotmean.rfloor+1) ] += mage_p
+    
     rmean = np.bincount( rotmean.rceil, mage_p ) + np.bincount( rotmean.rfloor, mage_n, minlength=rotmean.rmax  )
     
     # sum
@@ -442,7 +443,7 @@ def img2polar(img, center=None, final_radius=None, initial_radius = None, phase_
         polar_img += img[Yfloor,Xfloor+1] * Xremain*(1.0 - Yremain)
         # Crop the far edge, because we interpolated one pixel too far
         # polar_img = polar_img[:-1,:-1]
-        polar_img = np.reshape(polar_img,(final_radius-initial_radius,phase_width))
+        polar_img = np.reshape(polar_img,( np.int(final_radius-initial_radius), np.int(phase_width) ))
     return polar_img
     
 def interp2_bilinear(im, x, y):
@@ -501,7 +502,6 @@ def backgroundEstimate( input_image, fitType='gauss2', binFact=128, lpSigma=4.0 
     
     If the background is extremely weak (std < 1.0) then the fitting is ignored and just the mean value is reported.
     """
-    print( "DEBUG:backgroundEst: input_image # nans %d" % np.sum(np.isnan(input_image) ) )
     # background fitting
     xcrop, ycrop = np.meshgrid( np.arange(0,input_image.shape[1], binFact), np.arange(0,input_image.shape[0], binFact) )
     nn_sum = interp2_nn( scipy.ndimage.gaussian_filter( input_image, lpSigma ), xcrop, ycrop )
@@ -543,7 +543,6 @@ def backgroundEstimate( input_image, fitType='gauss2', binFact=128, lpSigma=4.0 
 
     if fitGauss2D.success:
         back = gauss2( fitGauss2D.x, xback, yback )
-        print( "DEBUG:backgroundEst: back # nans %d" % np.sum(np.isnan(back) ) )
         return back
     else: # Failure, have no effect
         print( "Background estimation failed" )
@@ -741,6 +740,93 @@ def plotHistClim( mage, cutoff=1E-3, colorbar=False, cbartitle="" ):
     pass    
     
 ############### MISCELLANEOUS ###############
+def powerpoly1( x, a1, b1, a2, c1 ):
+    return a1*(x**b1) + a2*x + c1
+
+def fit( x, y, funchandle='gauss1', estimates=None ):
+    """ Returns: fitstruct,  fitY, Rbest """
+    from scipy.optimize import curve_fit 
+    from scipy.stats.stats import linregress
+
+    if funchandle == 'gauss1':
+        def fitfunc( x, a1, b1, c1 ):
+            return a1 * np.exp( -( (x-b1)/ c1)**2 )
+        # Really arbitrary c1 estimate at basically 25 pixels..
+        if estimates is None:
+            estimates = np.array( [np.max(y), x[np.argmax(y)], 25.0*(x[1]-x[0]) ] )
+        
+    elif funchandle == 'poly1':
+        def fitfunc( x, a1, b1 ):
+            return a1 * x + b1
+        if estimates is None:
+            slope = (np.max(y)-np.min(y))/(np.max(x)-np.min(x))
+            intercept = np.min(y) - slope*x[np.argmin(y)]
+            estimates = [slope, intercept]
+    elif funchandle == 'poly2':
+        def fitfunc( x, a1, b1, c1 ):
+            return a1 * x **2.0 + b1 *x + c1
+        if estimates is None:
+            slope = (np.max(y)-np.min(y))/(np.max(x)-np.min(x))
+            intercept = np.min(y) - slope*x[np.argmin(y)]
+            estimates = [0.0, slope, intercept]
+    elif funchandle == 'poly3':
+        def fitfunc( x, a1, b1, c1, d1 ):
+            return a1 * x **3.0 + b1 *x**2.0 + c1*x + d1
+        if estimates is None:
+            slope = (np.max(y)-np.min(y))/(np.max(x)-np.min(x))
+            intercept = np.min(y) - slope*x[np.argmin(y)]
+            estimates = [0.0, 0.0, slope, intercept]
+    elif funchandle == 'poly5':
+        def fitfunc( x, a1, b1, c1, d1, e1, f1 ):
+            return a1 * x **5.0 + b1 *x**4.0 + c1*x**3.0 + d1*x**2.0 + e1*x + f1
+        if estimates is None:
+            slope = (np.max(y)-np.min(y))/(np.max(x)-np.min(x))
+            intercept = np.min(y) - slope*x[np.argmin(y)]
+            estimates = [0.0, 0.0, 0.0, 0.0, slope, intercept]
+    elif funchandle == 'abs1':
+        def fitfunc( x, a1 ):
+            return a1 * np.abs( x )
+        if estimates is None:
+            estimates = np.array( [ (np.max(y)-np.min(y))/(np.max(x)-np.min(x))])
+    elif funchandle == 'exp':
+        def fitfunc( x, a1, c1 ):
+            return a1 * np.exp( c1*x )
+        if estimates is None:
+            estimates = np.array( [1.0, -1.0] )
+    elif funchandle == 'expc':
+        def fitfunc( x, a1, c1, d1 ):
+            return a1 * np.exp( c1*x ) + d1
+        if estimates is None:
+            estimates = np.array( [1.0, -1.0, 1.0] )
+    elif funchandle == 'power1':
+        def fitfunc( x, a1, b1 ):
+            return a1*(x**b1)
+        if estimates is None:
+            estimates = np.array( [1.0, -2.0] )   
+    elif funchandle == 'power2':
+        def fitfunc( x, a1, b1, c1 ):
+            return a1*(x**b1) + c1
+        if estimates is None:
+            estimates = np.array( [1.0, -2.0, 1.0] )    
+    elif funchandle == 'powerpoly1':
+        def fitfunc( x, a1, b1, a2, c1 ):
+            return a1*(x**b1) + a2*x + c1
+        if estimates == None:
+            estimates = np.array( [1.0, -2.0, 0.0,  1.0] )
+    else:
+        fitfunc = funchandle
+        
+    try:
+        fitstruct, pcov = curve_fit( fitfunc, x, y, p0=estimates )
+        perr = np.sqrt(np.diag(pcov))
+        print( "Fitting completed with perr = " + str(perr) )
+        fitY = fitfunc( x, *fitstruct )
+        goodstruct = linregress( x, fitfunc( x, *fitstruct ) )
+        Rbest = goodstruct[2]
+    except RuntimeError:
+        print( "RAM: Curve fitting failed")
+        return
+    return fitstruct,  fitY, Rbest
 
 def guessCfgType( value ):
     # For guessing the data type (bool, integer, float, or string only) from ConfigParser

@@ -1218,8 +1218,8 @@ class skulkManager(QtCore.QThread):
         self.DEBUG = False
         
         # Processible file extensions
-        self.globPattern = ['*.dm4', '*.dm3', '*.tif', '*.mrc', '*.mrcs', '*.hdf5', '*.h5', 
-                            '*.bz2', '*.gz', '*.7z' ]
+        self.globPattern = ['*.dm4', '*.dm3', '*.mrc', '*.mrcz', '*.tif', '*.tiff',
+                            '*.mrcs', '*.hdf5', '*.h5', '*.bz2', '*.gz', '*.7z' ]
                 
         # Default object for copying the parameters (also accessed by Automator)    
         self.zorroDefault = zorro.ImageRegistrator()
@@ -1631,13 +1631,14 @@ class skulkManager(QtCore.QThread):
         deleteZorro = self.__clean__( state_id )
         self.automatorUpdate( deleteZorro.id, deleteZorro.name, 'delete' )
         
-        # Clean the existing log file
-        os.remove( deleteZorro.zorroObj.files['config'] )
+        # Because we update the configuration on promotion from READY to PROCESSING we do not need to delete teh existing file
+        # os.remove( deleteZorro.zorroObj.files['config'] )
         
         # Make a new one
         # Add it to the __globalHeap, __syncHeap should take care of itself.
         rawStackName = deleteZorro.zorroObj.files['stack']
         newState = zorroState( rawStackName, self.zorroDefault, self.paths, self.messageQueue )
+        
         # Give high priority
         newState.topPriority()   
         

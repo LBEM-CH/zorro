@@ -9,12 +9,13 @@ Created on Mon May 23 11:00:35 2016
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
-from . import  (ReliablePy, ioMRC, zorro_util, zorro)
+from . import  (ReliablePy, zorro_util, zorro)
 import time
 import os, os.path, glob
 import scipy.ndimage
 import re
 import collections
+import mrcz
 
 # For a multiprocessing, maybe I should use subprocess pool and a master process?  That would avoid having to 
 # any of the Python MPI libraries.  Then again maybe I should just learn mpi4py, likely it would be a 
@@ -63,10 +64,13 @@ def readGCTFLog( logName ):
     ctfDict['CtfFigureOfMerit'] = np.float32( FinalSplit[3] )
     return ctfDict
     
+    
 
-def partExtract( rln, globPath, boxShape, boxExt=".star", 
+    
+
+def partExtract( globPath, boxShape, boxExt=".star", 
                 binShape = None, binKernel = 'lanczos2',
-                rootName="part", sigmaFilt=3.0, 
+                rootName="part", sigmaFilt=-1.0, 
                 invertContrast=True, normalize=True, fitBackground=True,
                 movieMode=False, startFrame=None, endFrame=None, doseFilter=False ):
     """
@@ -127,7 +131,7 @@ def partExtract( rln, globPath, boxShape, boxExt=".star",
         xCoord = rlnBox.star['data_']['CoordinateX']
         yCoord = rlnBox.star['data_']['CoordinateY']
     
-        mrcMage = ioMRC.MRCImport( mrcFileName )
+        mrcMage = mrcz.MRCImport( mrcFileName )
         
         ###### Remove background from whole image #####
         if bool( fitBackground ):
@@ -229,7 +233,7 @@ def partExtract( rln, globPath, boxShape, boxExt=".star",
         # make changes and save them in the star file.
         particleFileName = os.path.join( "Particles", os.path.splitext( mrcFileName )[0] +"_" + rootName + ".mrcs" )
         # TODO: add pixel size to particles file
-        ioMRC.MRCExport( particles, particleFileName )
+        mrcz.MRCExport( particles, particleFileName )
             
         ##### Output a star file with CTF and particle info. #####
         print( "Particle file: " + particleFileName )
