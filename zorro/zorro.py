@@ -293,7 +293,7 @@ class ImageRegistrator(object):
         OutAvName = os.path.join( self.cachePath, stackBase + u"_mcOutAv.mrc" )
         OutStackName = os.path.join( self.cachePath, stackBase + u"_mcOut.mrc" )
         logName = os.path.join( self.cachePath, stackBase + u"_mc.zor" )
-        mrcz.MRCExport( self.images, InName )
+        mrcz.writeMRC( self.images, InName )
 
         # Force binning to 1, as performance with binning is poor
         binning = 1
@@ -454,7 +454,7 @@ class ImageRegistrator(object):
         
         try: 
             mrcName = os.path.join( self.cachePath, stackBase + "_unblurIN.mrc" )
-            mrcz.MRCExport( self.images, mrcName )
+            mrcz.writeMRC( self.images, mrcName )
         except:
             print( "Error in exporting MRC file to UnBlur" )
             return
@@ -488,6 +488,7 @@ class ImageRegistrator(object):
         sub.wait()
         
         try:
+            # Their FRC is significantly different from mine.
             self.FRC = np.loadtxt(frcOutName, comments='#', skiprows=0 )
             self.translations = np.loadtxt( shiftsOutName, comments='#', skiprows=0 ).transpose()
             # UnBlur uses Fortran ordering, so we need to swap y and x for Zorro C-ordering
@@ -495,17 +496,17 @@ class ImageRegistrator(object):
             # UnBlur returns drift in Angstroms
             self.translations /= ps
             # UnBlur registers to middle frame
-            # print( "WARNING: UnBlur shift normalization modified for testing" )
             self.translations -= self.translations[0,:]
             
             if bool( loadResult ):
                 print( "Loading UnBlur aligned frames into ImageRegistrator.images" )
                 if 'dose' in self.filterMode:
-                    self.filtSum = mrcz.MRCImport( outputAvName )
+                    # TODO: WHow to get both filtered images and unfiltered?
+                    self.imageSum = mrcz.readMRC( outputAvName )[0]
                 else:
-                    self.imageSum = mrcz.MRCImport( outputAvName )
-                # TODO: We have a bit of an issue, is this UnBlur movie dose filtered?
-                self.images = mrcz.MRCImport( outputStackName )
+                    self.imageSum = mrcz.readMRC( outputAvName )[0]
+                # TODO: We have a bit of an issue, this UnBlur movie is dose filtered...
+                self.images = mrcz.readMRC( outputStackName )[0]
         except IOError:
             print( "UnBlur likely core-dumped, try different input parameters?" )
         finally:
@@ -2204,9 +2205,9 @@ class ImageRegistrator(object):
         else:
             mrcExt = ".mrcz"
             
-        mrcz.MRCExport( evenReg.imageSum, u"%s_even%s" % (stackFront, mrcExt ),
+        mrcz.writeMRC( evenReg.imageSum, u"%s_even%s" % (stackFront, mrcExt ),
                         compressor=self.files[u'compressor'], clevel=self.files[u'clevel'], n_threads=self.n_threads)
-        mrcz.MRCExport( oddReg.imageSum, u"%s_odd%s" % (stackFront, mrcExt ),
+        mrcz.writeMRC( oddReg.imageSum, u"%s_odd%s" % (stackFront, mrcExt ),
                         compressor=self.files[u'compressor'], clevel=self.files[u'clevel'], n_threads=self.n_threads) 
         
         eoReg.tiledFRC( eoReg.images[0,:,:], eoReg.images[1,:,:], 
@@ -2566,6 +2567,7 @@ class ImageRegistrator(object):
         errorNormToCDF = errorNormToCDF[keepIndices]
         normalSigmaKeep = normalSigma[keepIndices]
         
+
         # Try for linear fits, resort to defaults if it fails
         if not bool(cutoffLower):
             try:
@@ -2573,6 +2575,7 @@ class ImageRegistrator(object):
                 lowerA = np.array( [normalSigmaKeep[:lowerIndex], np.ones(lowerIndex )] )
                 lowerFit = np.linalg.lstsq( lowerA.T, errorNormToCDF[:lowerIndex] )[0]
                 cutoffLower = np.float32( -lowerFit[1]/lowerFit[0] )
+                self.hotpixInfo[u'cutoffLower'] = float( cutoffLower )
             except:
                 print( "zorro.hotpixFilter failed to estimate bound for dead pixels, defaulting to -4.0" )
                 cutoffLower = np.float32( self.hotpixInfo['cutoffLower'] )
@@ -2583,16 +2586,16 @@ class ImageRegistrator(object):
                 upperA = np.array( [normalSigmaKeep[upperIndex:], np.ones( len(normalSigmaKeep) - upperIndex )] )
                 upperFit = np.linalg.lstsq( upperA.T, errorNormToCDF[upperIndex:] )[0]
                 cutoffUpper = np.float32( -upperFit[1]/upperFit[0] )
+                self.hotpixInfo[u'cutoffUpper'] = float( cutoffUpper )
             except:
                 print( "zorro.hotpixFilter failed to estimate bound for hot pixels, defaulting to +3.25" )
-                cutoffLower = np.float32( self.hotpixInfo['cutoffUpper'] )
+                cutoffUpper = np.float32( self.hotpixInfo['cutoffUpper'] )
+            
             
         unalignedSigma = (unalignedSum - bestNorm.x[0]) / bestNorm.x[1]
         
         
         # JSON isn't serializing numpy types anymore, so we have to explicitely cast them
-        self.hotpixInfo[u'cutoffLower'] = float( cutoffLower )
-        self.hotpixInfo[u'cutoffUpper'] = float( cutoffUpper )
         self.hotpixInfo[u"guessDeadpix"] = int( np.sum( unalignedSigma < cutoffLower ) )
         self.hotpixInfo[u"guessHotpix"] = int( np.sum( unalignedSigma > cutoffUpper  ) )
         self.hotpixInfo[u"frameMean"] = float( bestNorm.x[0]/self.images.shape[0] )
@@ -2926,7 +2929,7 @@ class ImageRegistrator(object):
         
         if bool( movieMode ):
             # Write an MRCS
-            mrcz.MRCExport( self.images, mrcName )
+            mrcz.writeMRC( self.images, mrcName )
             # Call GCTF
 
             gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --mdef_ave_type 1 --logsuffix  _ctffind3.log " % (mrcName, self.pixelsize*10, self.voltage, self.C3 )
@@ -2934,7 +2937,7 @@ class ImageRegistrator(object):
         else: # No movieMode
             if not np.any( self.imageSum ):
                 raise AttributeError( "Error in execGCTF: No image sum found" )
-            mrcz.MRCExport( self.imageSum, mrcName )
+            mrcz.writeMRC( self.imageSum, mrcName )
             # Call GCTF
             gctf_exec = "gctf %s --apix %f --kV %f --cs %f --do_EPA 1 --logsuffix  _ctffind3.log " % (mrcName, self.pixelsize*10, self.voltage, self.C3 )
 
@@ -2945,7 +2948,7 @@ class ImageRegistrator(object):
         #sub.wait() 
 
         # Diagnostic image ends in .ctf
-        self.CTFDiag = mrcz.MRCImport( diagOutName )
+        self.CTFDiag = mrcz.readMRC( diagOutName )[0]
 
         # Parse the output _ctffind3.log for the results
         with open( logName, 'r' ) as fh:
@@ -3024,10 +3027,10 @@ class ImageRegistrator(object):
         try: 
             mrcName = os.path.join( self.cachePath, stackBase + u"_ctf4.mrc" )
             if bool(movieMode):
-                mrcz.MRCExport( self.images, mrcName )
+                mrcz.writeMRC( self.images, mrcName )
                 number_of_frames_to_average = 1
             else:
-                mrcz.MRCExport( self.imageSum, mrcName )
+                mrcz.writeMRC( self.imageSum, mrcName )
         except:
             print( "Error in exporting MRC file to CTFFind4.1" )
             return
@@ -3069,7 +3072,7 @@ class ImageRegistrator(object):
             self.CTFInfo[u'CtfFigureOfMerit'] = float( CTF4Results[5] )
             self.CTFInfo[u'FinalResolution'] = float( CTF4Results[6] )
             
-            self.CTFDiag = mrcz.MRCImport( diagOutName )
+            self.CTFDiag = mrcz.readMRC( diagOutName )[0]
             
         except:
             print( "CTFFIND4 likely core-dumped, try different input parameters?" )
@@ -3148,11 +3151,11 @@ class ImageRegistrator(object):
             mrcName = os.path.join( self.cachePath, stackBase + u"_ctf4.mrc" )
             if movieMode:
                 input_is_a_movie = 'true'
-                mrcz.MRCExport( self.images, mrcName )
+                mrcz.writeMRC( self.images, mrcName )
                 number_of_frames_to_average = 1
             else:
                 input_is_a_movie = 'false'
-                mrcz.MRCExport( self.imageSum, mrcName )
+                mrcz.writeMRC( self.imageSum, mrcName )
         except:
             print( "Error in exporting MRC file to CTFFind4" )
             return
@@ -3191,7 +3194,7 @@ class ImageRegistrator(object):
             self.CTFInfo[u'CtfFigureOfMerit'] = float( CTF4Results[5] )
             self.CTFInfo[u'FinalResolution'] = float( CTF4Results[6] )
             
-            self.CTFDiag = mrcz.MRCImport( diagOutName )
+            self.CTFDiag = mrcz.readMRC( diagOutName )[0]
             
         except IOError:
             print( "CTFFIND4 likely core-dumped, try different input parameters?" )
@@ -3380,7 +3383,7 @@ class ImageRegistrator(object):
         elif file_ext == u".dm4":
             # Expects a DM4 image stack
             print( "Open as DM4: " + self.files[target] )
-            dm4obj = mrcz.DM4Import( self.files[target], verbose=False, useMemmap = useMemmap )
+            dm4obj = mrcz.readDM4( self.files[target], verbose=False, useMemmap = useMemmap )
             tempData = np.copy( dm4obj.im[1].imageData.astype( float_dtype ), order='C' )
             # Load pixelsize from file
             try:
@@ -3409,7 +3412,7 @@ class ImageRegistrator(object):
             del dm4obj
         elif file_ext == u".mrc" or file_ext == u'.mrcs' or file_ext == u".mrcz" or file_ext == u".mrczs":
             # Expects a MRC image stack
-            tempData, header = mrcz.MRCImport( self.files[target], returnHeader=True )
+            tempData, header = mrcz.readMRC( self.files[target], pixelunits=u'nm' )
             # Force data to 32-bit float if it uint8 or uint16
             if tempData.dtype.itemsize < 4:
                 tempData = tempData.astype('float32')
@@ -3576,8 +3579,8 @@ class ImageRegistrator(object):
         #### SAVE ALIGNED SUM ####
         if self.verbose >= 1:
             print( "Saving: " + os.path.join(sumPath,sumFile) )
-        mrcz.MRCExport( self.imageSum, os.path.join(sumPath,sumFile), 
-                        pixelsize=self.pixelsize,
+        mrcz.writeMRC( self.imageSum, os.path.join(sumPath,sumFile), 
+                        pixelsize=self.pixelsize, pixelunits=u'nm',
                         voltage = self.voltage, C3 = self.C3, gain = self.gain,
                         compressor=self.files[u'compressor'], 
                         clevel=self.files[u'clevel'], 
@@ -3601,8 +3604,8 @@ class ImageRegistrator(object):
             
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(alignPath,alignFile) )
-            mrcz.MRCExport( self.images, os.path.join(alignPath,alignFile), 
-                            pixelsize=self.pixelsize,
+            mrcz.writeMRC( self.images, os.path.join(alignPath,alignFile), 
+                            pixelsize=self.pixelsize, pixelunits=u'nm',
                             voltage = self.voltage, C3 = self.C3, gain = self.gain,
                             compressor=self.files[u'compressor'], 
                             clevel=self.files[u'clevel'], 
@@ -3622,8 +3625,8 @@ class ImageRegistrator(object):
                 
             if self.verbose >= 1:
                 print( "Saving: " + os.path.join(filtPath, filtFile) )
-            mrcz.MRCExport( self.filtSum, os.path.join(filtPath, filtFile), 
-                            pixelsize=self.pixelsize,
+            mrcz.writeMRC( self.filtSum, os.path.join(filtPath, filtFile), 
+                            pixelsize=self.pixelsize, pixelunits=u'nm',
                             voltage = self.voltage, C3 = self.C3, gain = self.gain,
                             compressor=self.files[u'compressor'], 
                             clevel=self.files[u'clevel'], 
@@ -3635,8 +3638,8 @@ class ImageRegistrator(object):
             if self.verbose >= 1:
                 print( "Saving: " + self.files[u'xc'] )
                 
-            mrcz.MRCExport( np.asarray( self.C, dtype='float32'), self.files[u'xc'], 
-                            pixelsize=self.pixelsize,
+            mrcz.writeMRC( np.asarray( self.C, dtype='float32'), self.files[u'xc'], 
+                            pixelsize=self.pixelsize, pixelunits=u'nm',
                             voltage = self.voltage, C3 = self.C3, gain = self.gain,
                             compressor=self.files[u'compressor'], 
                             clevel=self.files[u'clevel'], 

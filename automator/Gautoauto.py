@@ -124,7 +124,7 @@ def refineRunGauto( mrcName, optInit, optPlot, optRefine ):
     devnull = open(os.devnull, 'w' )
     
     ccMaxName = os.path.splitext( mrcName )[0] + "_ccmax.mrc"
-    ccMax = mrcz.MRCImport( ccMaxName )
+    ccMax, _ = mrcz.readMRC( ccMaxName )
         
     pdfCC, hX = np.histogram( ccMax[optPlot['edge']:-optPlot['edge'],optPlot['edge']:-optPlot['edge']], bins=512 )
     pdfCC = pdfCC.astype('float32');    hX = hX[:-1]
@@ -262,7 +262,7 @@ def generatePNG( diagName, pngName, boxes, boxWidth, goodnessMetric, optPlot ):
         print( "File not found: %s"%diagName )
         return
           
-    Mage = mrcz.MRCImport( diagName )
+    Mage, _ = mrcz.readMRC( diagName )
     if Mage.shape[0] <= 512:
         binning = 8
     elif Mage.shape[0] <= 682:

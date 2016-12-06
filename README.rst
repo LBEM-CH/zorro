@@ -1,6 +1,6 @@
-=====
+
 Zorro Image Registration Software
-=====
+=================================
 
 Author: Robert A. McLeod
 
@@ -29,7 +29,7 @@ Zorro is MIT license.
 
 
 Automator 
------
+--------
 
 The Automator for Zorro and 2dx is a GUI interface to Zorro.
 
@@ -42,7 +42,7 @@ Automator also comes with the Skulk Manager tool which may be used as a daemon t
 Automator is LGPL license.
 
 Feature List
------
+------------
 
 
 * Import: DM4, MRC, HDF5, stacked TIFF
@@ -59,7 +59,7 @@ Feature List
 
 
 Citations
------
+---------
 
 A manuscript regarding Zorro has been submitted to a peer-reviewed publication.
 

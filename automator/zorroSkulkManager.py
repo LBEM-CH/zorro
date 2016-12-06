@@ -1219,7 +1219,7 @@ class skulkManager(QtCore.QThread):
         
         # Processible file extensions
         self.globPattern = ['*.dm4', '*.dm3', '*.mrc', '*.mrcz', '*.tif', '*.tiff',
-                            '*.mrcs', '*.hdf5', '*.h5', '*.bz2', '*.gz', '*.7z' ]
+                            '*.mrcs', '*.mrcsz', '*.hdf5', '*.h5', '*.bz2', '*.gz', '*.7z' ]
                 
         # Default object for copying the parameters (also accessed by Automator)    
         self.zorroDefault = zorro.ImageRegistrator()

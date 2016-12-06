@@ -516,6 +516,7 @@ IMS_HELPTEXT = """
     "F" toggles Fourier transform
     "c" swithces between gray, gnuplot, jet, nipy_spectral colormaps. 
     "h" turns on histogram-based contrast limits
+    "b" hides/shows boxes (searches for _automatch.box file )
     "i" zooms in
     "o" zooms out
     "v" transposes (revolves) the axes so a different projection is seen.
@@ -535,41 +536,8 @@ IMS_HELPTEXT = """
     """
     
 class ims(object):
-    """
-    zorro.zorro_plotting.ims(image)
+    IMS_HELPTEXT
     
-    Originally written by Ondrej Madula.
-    Modified by Robert A. McLeod
-    
-    Shows individual frames in the 3D image (dimensions organized as [z,x,y]). 
-    "f" shows the view in full-screen
-    "n" next frame, ("N" next by step of 10)
-    "p" previous frame, ("P" previous by step of 10)
-    "l" toogles the log scale. 
-    "y" toggles polar transform
-    "F" toggles Fourier transform
-    "c" swithces between gray, gnuplot, jet, nipy_spectral colormaps. 
-    "h" turns on sigma-scaled contrast limits
-    "i" zooms in
-    "o" zooms out
-    "v" transposes (revolves) the axes so a different projection is seen.
-    "arrows" move the frame around
-    "g" gaussian low-pass ( sharpen more with 'k', smoothen more with 'm')
-    "r" resets the position to the center of the frame
-    "q" increase the contrast limits ("Q" is faster)
-    "w" decrease the contrast limits ("W" is faster)
-    "R" reset contrast to default
-    "s" saves current view as PNG
-    "S" shows sum projection
-    "M" shows max projection
-    "V" shows var projection    
-    "t" print statistics for current frame
-    "T" prints statistics for entire stack
-    
-    Works with qt backend -> start ipython as: "ipyton --matplotlib qt" or do e.g.: "matplotlib.use('Qtg4Agg')"
-
-    The core of the class taken from http://stackoverflow.com/questions/6620979/2d-slice-series-of-3d-array-in-numpy
-    """
     plt.rcParams['keymap.yscale'] = '' # to disable the binding of the key 'l'
     plt.rcParams['keymap.pan'] = '' # to disable the binding of the key 'p'    
     plt.rcParams['keymap.grid'] = '' # to disable the binding of the key 'g'        
@@ -597,39 +565,19 @@ class ims(object):
         self.__sigmaIndex = 31 # 3.0 sigma by default
         self.blocking = blocking
         
+        self.showBoxes = True
+        self.boxLen = 0
+        self.boxYX = None
+        self.boxFoM = None
+        
         print( "ims: type(im) = %s" % type(im) )
         
         if sys.version_info >= (3,0):
             if isinstance( self.im, str ):
-                self.titles = self.im
-                print( "Try to load MRC or DM4 files" )
-                file_ext = os.path.splitext( self.im )[1]
-                if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
-                    file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
-                    self.im, self.header = mrcz.MRCImport( self.im, returnHeader=True )
-                elif file_ext.lower() == ".dm4":
-                    dm4struct = zorro.ioDM.DM4Import( self.im )
-                    self.im = dm4struct.im[1].imageData
-                    self.header = dm4struct.im[1].imageInfo
-                    del dm4struct
-                else:
-                    print( "Filename has unknown/unimplemented file type: " + self.im )
-                    return
-        else:
+                self.loadFromFile( im )
+        else: # Python 2
             if isinstance( self.im, str ) or isinstance(self.im, unicode):
-                print( "Try to load MRC or DM4 files" )
-                file_ext = os.path.splitext( self.im )[1]
-                if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
-                    file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
-                    self.im, self.header = mrcz.MRCImport( self.im, returnHeader=True )
-                elif file_ext.lower() == ".dm4":
-                    dm4struct = mrcz.DM4Import( self.im )
-                    self.im = dm4struct.im[1].imageData
-                    self.header = dm4struct.im[1].imageInfo
-                    del dm4struct
-                else:
-                    print( "Filename has unknown/unimplemented file type: " + self.im )
-                    return
+                self.loadFromFile( im )
                 
         if isinstance( self.im, tuple) or isinstance( self.im, list):
             # Gawd tuples are annoyingly poorly typedefed
@@ -691,13 +639,87 @@ class ims(object):
         ################
         
         self.__recompute__()
-        self.fig.canvas.mpl_connect('key_press_event',self.__call__ )
+        self.fig.canvas.mpl_connect( 'key_press_event', self.__call__ )
         self.fig.canvas.mpl_connect( 'close_event', self.__exit__ )
+        self.fig.canvas.mpl_connect( 'resize_event', self.__draw__ )
 
         plt.show( block=self.blocking )
         
         # plt.ion()
         
+    def loadFromFile(self, filename, loadBoxes=True ):
+        self.titles = self.im
+        print( "Try to load MRC or DM4 files" )
+        file_front, file_ext = os.path.splitext( self.im )
+        if (file_ext.lower() == ".mrc" or file_ext.lower() == ".mrcs" or 
+            file_ext.lower() == ".mrcz" or file_ext.lower() == ".mrcsz"):
+            self.im, self.header = mrcz.readMRC( self.im, pixelunits=u'nm' )
+        elif file_ext.lower() == ".dm4":
+            dm4struct = mrcz.readDM4( self.im )
+            self.im = dm4struct.im[1].imageData
+            self.header = dm4struct.im[1].imageInfo
+            del dm4struct
+        else:
+            print( "Filename has unknown/unimplemented file type: " + self.im )
+            return
+            
+        # Check for boxes
+        # Star files don't contain box sizes so use the box files instead
+        box_name = file_front + "_automatch.box"
+        if bool(self.showBoxes) and os.path.isfile( box_name ):
+            self.loadBoxFile( box_name )
+            return
+            
+        # Try the star file instead
+        box_name = file_front + "_automatch.star"
+        if bool(self.showBoxes) and os.path.isfile( box_name ):
+            self.loadStarFile( box_name )
+            return
+
+        
+    def loadBoxFile(self, box_name ):
+        box_data = np.loadtxt( box_name, comments="_" )
+        # box_data columns = [x_center, y_center, ..., ..., FigureOfMerit]
+        self.boxLen = box_data[0,2]
+
+        # In boxfiles coordinates are at the edges.
+        self.boxYX = np.fliplr( box_data[:,:2] )
+        # DEBUG: The flipping of the y-coordinate system is annoying...
+        print( "boxYX.shape = " + str(self.boxYX.shape) + ", len = " + str(self.boxLen) )
+        self.boxYX[:,0] = self.im.shape[0] - self.boxYX[:,0]
+        self.boxYX[:,1] += int( self.boxLen / 2 )
+        self.boxYX[:,0] -= int( self.boxLen/2)
+        try:
+            self.boxFoM = box_data[:,4]
+            
+            clim = zorro.zorro_util.ciClim( self.boxFoM, sigma=2.5 )
+            self.boxFoM = zorro.zorro_util.normalize( np.clip( self.boxFoM, clim[0], clim[1] ) )
+
+        except:
+            self.boxFoM = np.ones( self.boxYX.shape[0] )
+        self.boxColors = plt.cm.gnuplot( self.boxFoM )
+        
+    def loadStarFile(self, box_name ):
+        box_data = np.loadtxt( box_name, comments="_", skiprows=5 )
+        # box_data columns = [x_center, y_center, ..., ..., FigureOfMerit]
+        # In star files coordinates are centered
+        self.boxYX = np.fliplr( box_data[:,:2] )
+        # DEBUG: The flipping of the y-coordinate system is annoying...
+        self.boxYX[:,0] = self.im.shape[0] - self.boxYX[:,0]
+
+        # There's no box size information in a star file so we have to use a guess
+        self.boxLen = 224
+        #self.boxYX[:,1] -= int( self.boxLen / 2 )
+        #self.boxYX[:,0] += int( self.boxLen / 2 )
+        try:
+            self.boxFoM = box_data[:,4]
+            clim = zorro.zorro_util.ciClim( self.boxFoM, sigma=2.5 )
+            self.boxFoM = zorro.zorro_util.normalize( np.clip( self.boxFoM, clim[0], clim[1] ) )
+
+        except:
+            self.boxFoM = np.ones( self.boxYX.shape[0] )
+        
+        self.boxColors = plt.cm.gnuplot( self.boxFoM )
     def __setaxes__(self):
         self.ax.cla()
         
@@ -785,7 +807,7 @@ class ims(object):
             self.__maxList[self.index] = np.max( self.im2show )
         self.__draw__()
             
-    def __draw__(self):
+    def __draw__(self, info=None ):
         # print( "Called ims.draw()" )
         plt.cla()
         
@@ -798,24 +820,12 @@ class ims(object):
         halfWidth_y = np.int( 0.5* self.frameShape[0]/self.zoom )
         halfWidth_x = np.int( 0.5* self.frameShape[1]/self.zoom )
 
-        im_range = [ np.maximum( 0, center_y-halfWidth_y), 
-                     np.minimum( self.frameShape[0], center_y+halfWidth_y ),
-                     np.maximum( 0, center_x-halfWidth_x), 
-                     np.minimum( self.frameShape[1], center_x+halfWidth_x ) ]
+        im_range = [ np.maximum( 0, center_x-halfWidth_x), 
+                     np.minimum( self.frameShape[1], center_x+halfWidth_x ),
+                     np.maximum( 0, center_y-halfWidth_y), 
+                     np.minimum( self.frameShape[0], center_y+halfWidth_y ) ]
+
         
-        #hx,hy = self.frameShape[0]/2., self.frameShape[1]/2.
-        #lx,ly = hx/(self.zoom),hy/(self.zoom)
-
-        #rx_low = np.maximum( np.minimum(np.floor(hx) + self.offx - np.floor(lx),self.frameShape[0]-self.stepXY),0.0)
-        #rx_high = np.minimum(np.maximum(np.floor(hx) + self.offx + np.ceil(lx),self.stepXY),self.frameShape[0])-1
-        # RAM: this is a very expensive indicing operation...
-        #rx = np.arange(rx_low,rx_high)[:,np.newaxis].astype( 'int32' )
-
-        #self.posProfVert = np.round(self.frameShape[0]/2)
-
-        #ry_low = np.maximum( np.minimum(np.floor(hy) + self.offy - np.floor(ly),self.frameShape[1]-self.stepXY),0.0)
-        #ry_high = np.minimum( np.maximum(np.floor(hy) + self.offy + np.ceil(ly),self.stepXY),self.frameShape[1])-1
-        #ry = np.arange(ry_low,ry_high).astype( 'int32' )
     
 
         if self.sigmaMode:
@@ -842,13 +852,40 @@ class ims(object):
         norm = None
         
         self.ax.set_title( tit )
-        self.ax.imshow(self.im2show[ im_range[0]:im_range[1], im_range[2]:im_range[3 ]], 
+        self.ax.imshow(self.im2show[ im_range[2]:im_range[3], im_range[0]:im_range[1] ], 
                        vmin=clim_min, vmax=clim_max, 
                        interpolation='none',
                        norm=norm,
                        extent=im_range, 
                         cmap=self.cmap )
         # plt.colorbar(self.ax)
+        
+        # Printing particle box overlay
+        if bool(self.showBoxes) and np.any(self.boxYX) != None and self.boxLen > 0:
+            # Coordinate systems are upside-down in y-axis?
+            # box2 = int( self.boxLen/4 ) 
+            dpi = self.fig.get_dpi()
+            width = np.minimum( self.fig.get_figwidth(), self.fig.get_figheight() )
+            
+            # Ok I'm not getting draw events from resizing...
+            markerSize =  (self.boxLen*width/dpi)**2
+            print( "dpi = %d, width = %g, markerSize = %g" %(dpi,width, markerSize) )
+            #for J in np.arange( self.boxYX.shape[0] ):
+            #    box = self.boxYX[J,:]
+
+                #boxCoord = np.array( [box+[-box2,-box2], box+[-box2,box2], 
+                #                      box+[box2,box2], 
+                #                      box+[box2,-box2], box+[-box2,-box2] ] )
+                
+            
+
+            
+#            self.ax.scatter( self.boxYX[:,1], self.boxYX[:,0], s=markerSize, color=colors, alpha=0.3  )
+            self.ax.scatter( self.boxYX[:,1], self.boxYX[:,0], 
+                            s=markerSize, color=self.boxColors, alpha=0.2, marker='s'  )
+            plt.xlim( [im_range[0], im_range[1] ] )
+            plt.ylim( [im_range[2], im_range[3] ] )
+        
                         
         # RAM: This format_coord function is amazingly sensitive to minor changes and often breaks
         # the whole class.
@@ -953,6 +990,9 @@ class ims(object):
             recompute = True
         elif event.key == 'c':
             self.cmap = next( self.cmaps_cycle)
+            redraw = True
+        elif event.key == 'b':
+            self.showBoxes = not self.showBoxes
             redraw = True
         elif event.key == 'h':
             self.sigmaMode = not self.sigmaMode

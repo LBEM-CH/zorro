@@ -20,7 +20,6 @@ import os.path
 
 from .__version__ import __version__
 
-from . import ReliablePy
 from . import extract
 
 # Call Zorro as a blocking subprocess call on a provided config/log file.

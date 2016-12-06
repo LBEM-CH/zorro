@@ -958,7 +958,7 @@ def decompressFile( filename, outputDir = None, n_threads = None ):
     # We can only get here if 
     while sub.wait(): pass
     #print( "decompressFile: Trying to remove: " + filename )
-    os.remove( filename ) # Remove original, because redirects turn -k on.
+    os.remove( filename ) # Remove original, because redirects trn -k on.
     return newFilename  # Make new filename from filefront
     
     

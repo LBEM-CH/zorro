@@ -1,8 +1,21 @@
 CHANGELOG
-=======
+=========
+
+ZORRO 0.7.3
+===========
+
+* ims command-line utility now tries to display associated gautomatch "_automatch.box"
+  files.  If these are not available it defaults to "_automatch.star" files but
+  these files do not contain box size information.
+* Fixed some bugs in outputing Frealign .par files from Relion-2 .star files. 
+  Now applies a random occupancy (0.0-100.0) for each particle for generating 
+  initial classes.
+* ReliablePy was moved to the mrcz package, as it is not really dependant on 
+  Zorro.
+
 
 ZORRO 0.7.2
-======
+===========
 
 * Initial implementation of testing module. These are in general slow tests, 
   as the majority problems in Zorro only manifest under load in my experience.
@@ -23,7 +36,7 @@ ZORRO 0.7.2
 * Changed license for Zorro from MIT to BSD 2-clause.
 
 ZORRO 0.7.1b1
-=======
+=============
 
 * Fixed a bug in Automator that flipped MRC/MRCZ names.
 * Fixed a bug in IMS that was killing interactive Python scripts.
@@ -42,7 +55,7 @@ ZORRO 0.7.1b1
   sorted.
 
 ZORRO 0.7.1b0
-=======
+=============
 
 * Prototype MRCZ/MRCSZ format using multicore blosc compressor.  External utilities
   to convert back to MRC are on the TODO list.  Set compression options (code and 
@@ -77,7 +90,7 @@ ZORRO 0.7.1b0
 
 
 ZORRO 0.7.0b0
-=======
+=============
 
 * Added support for 4-bit MRC images using the 101-type from SerialEM
 * Added support for gain reference normalization.  The user is responsible for 
@@ -103,6 +116,6 @@ the influence of outliers on these metrics. This does not affect registration, j
 
 
 ZORRO 0.6.2b0
-=======
+=============
 
 * Initial beta

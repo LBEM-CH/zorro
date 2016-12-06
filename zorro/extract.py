@@ -131,7 +131,7 @@ def partExtract( globPath, boxShape, boxExt=".star",
         xCoord = rlnBox.star['data_']['CoordinateX']
         yCoord = rlnBox.star['data_']['CoordinateY']
     
-        mrcMage = mrcz.MRCImport( mrcFileName )
+        mrcMage = mrcz.readMRC( mrcFileName )[0]
         
         ###### Remove background from whole image #####
         if bool( fitBackground ):
@@ -233,7 +233,7 @@ def partExtract( globPath, boxShape, boxExt=".star",
         # make changes and save them in the star file.
         particleFileName = os.path.join( "Particles", os.path.splitext( mrcFileName )[0] +"_" + rootName + ".mrcs" )
         # TODO: add pixel size to particles file
-        mrcz.MRCExport( particles, particleFileName )
+        mrcz.writeMRC( particles, particleFileName ) # TODO: pixelsize
             
         ##### Output a star file with CTF and particle info. #####
         print( "Particle file: " + particleFileName )

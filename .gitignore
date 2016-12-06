@@ -1,7 +1,7 @@
 dist
 build
 .eggs
-zorro.egg-info
+zorroautomator.egg-info
 zorro.wiki
 *.bash
 *.bat

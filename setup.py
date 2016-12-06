@@ -79,7 +79,7 @@ import time
 
 major_ver = 0
 minor_ver = 7
-nano_ver = 2
+nano_ver = 3
 branch = 'b0'
 
 version = "%d.%d.%d%s" % (major_ver, minor_ver, nano_ver, branch)
