@@ -25,7 +25,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-=====Numexprz is released under the MIT License=====
+=====Numexprz is released under the BSD 2-clause License=====
 
 Copyright (c) 2007,2008  David M. Cooke <david.m.cooke@gmail.com>
 Copyright (c) 2009,2010  Francesc Alted <faltet@pytables.org>

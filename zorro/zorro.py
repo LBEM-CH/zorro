@@ -138,7 +138,7 @@ class ImageRegistrator(object):
         # for 'hot' in filterMode
         self.hotpixInfo = { u"logisticK":6.0, u"relax":0.925, u"maxSigma":8.0, u"psf": u"K2",
                            u"guessHotpix":0, u"guessDeadpix":0, u"decorrOutliers":False,
-                           u"cutoffLower":-4.0, u"cutoffUpper":3.25 }
+                           u"cutoffLower":-4.0, u"cutoffUpper":3.25, u"neighborPix":0 }
         
         
         self.FFTSum = None
@@ -2633,7 +2633,8 @@ class ImageRegistrator(object):
         neighbourlyOutlierMask = nz.evaluate( "neighbourlyOutlierMask > neighbourThres" )
         neighbourlyIndices = np.where( nz.evaluate( "neighbourlyOutlierMask > neighbourThres" ) )
         bestMean = bestNorm.x[0] / m
-        print( "Number of neighbourly outlier pixels: %d" % len(neighbourlyIndices[0]) )
+        print( "Number of neighborly outlier pixels: %d" % len(neighbourlyIndices[0]) )
+        self.hotpixInfo[u'neighborPix'] = len(neighbourlyIndices[0])
         neighbourFilt = np.zeros_like( psfFiltMean )
         for (nY, nX) in zip( neighbourlyIndices[0], neighbourlyIndices[1] ):
             # We'll use 5x5 here, substituting the bestMean if it's all garbage

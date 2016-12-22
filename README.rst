@@ -29,7 +29,7 @@ Zorro is MIT license.
 
 
 Automator 
---------
+---------
 
 The Automator for Zorro and 2dx is a GUI interface to Zorro.
 

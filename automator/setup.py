@@ -29,6 +29,7 @@ def configuration( parent_package='', top_path=None ):
     config.add_data_files( ('', 'automator/*.ini') )
     config.add_data_files( ("", "automator/*.ui" ) )
     config.add_data_files( ("", "automator/*.txt" ) )    
+    
     config.make_config_py()
     return config
     

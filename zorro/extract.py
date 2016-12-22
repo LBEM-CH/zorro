@@ -9,13 +9,14 @@ Created on Mon May 23 11:00:35 2016
 from __future__ import division, print_function, absolute_import
 
 import numpy as np
-from . import  (ReliablePy, zorro_util, zorro)
+from . import  (zorro_util, zorro)
 import time
 import os, os.path, glob
 import scipy.ndimage
 import re
 import collections
 import mrcz
+from mrcz import ReliablePy
 
 # For a multiprocessing, maybe I should use subprocess pool and a master process?  That would avoid having to 
 # any of the Python MPI libraries.  Then again maybe I should just learn mpi4py, likely it would be a 

@@ -12,6 +12,8 @@ ZORRO 0.7.3
   initial classes.
 * ReliablePy was moved to the mrcz package, as it is not really dependant on 
   Zorro.
+* Installing on Python 3.5 is now possible, but it will not install Automator, 
+  only Zorro and Numexprz.
 
 
 ZORRO 0.7.2

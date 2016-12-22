@@ -2,7 +2,7 @@
 ###################################################################
 #  Zorro Dose-fractionated Image Registration Software
 #
-#      License: Limited GNU Public License
+#      License: BSD
 #      Author:  Robert A. McLeod
 #
 #  See LICENSE.txt for details about copyright and
@@ -80,7 +80,7 @@ import time
 major_ver = 0
 minor_ver = 7
 nano_ver = 3
-branch = 'b0'
+branch = 'b1'
 
 version = "%d.%d.%d%s" % (major_ver, minor_ver, nano_ver, branch)
 
@@ -91,9 +91,13 @@ with open( "automator/__version__.py", 'w' ) as fh:
     fh.write( "__version__ = '" + version + "'\n" )
 
 
+INSTALL_AUTOMATOR = True
 if sys.version_info < (2, 7):
     raise RuntimeError( "ZorroAutomator requires python 2.7 or greater" )
-
+if sys.version_info > (3, 4):
+    print( "WARNING: PySide is not compatible with Python > 3.5, Automator will not be installed" )
+    INSTALL_AUTOMATOR = False
+    
 # Always prefer setuptools over distutils
 try:
     import setuptools
@@ -126,8 +130,9 @@ def configuration(parent_package=None,top_path=None):
     os.chdir( here )
     config.add_subpackage('numexprz')
     os.chdir( here )
-    config.add_subpackage('automator')
-    os.chdir( here )
+    if INSTALL_AUTOMATOR:
+        config.add_subpackage('automator')
+        os.chdir( here )
 
     config.add_data_files( (".", 'README.rst') )
     config.add_data_files( (".", "LICENSE.txt") )
@@ -153,7 +158,7 @@ def setup_zorro():
                       author='Robert A. McLeod',
                       author_email='robert.mcleod@unibas.ch',
                       url='https://github.com/C-CINA/Zorro',
-                      license='MIT',
+                      license='BSD',
                       packages=[], # DON'T INLCUDE subpackages here in setuptools...
                       install_requires=requirements,
                       setup_requires=requirements,
@@ -164,6 +169,11 @@ def setup_zorro():
                                             "ims = zorro.zorro_plotting:main" ],
                           },
                       # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
+                      extras_require={
+                            ':python_version <= "3.4"': [
+                                'pyside',
+                            ],
+                        },
                       classifiers=[
                             # How mature is this project? Common values are
                             #   3 - Alpha
@@ -184,6 +194,7 @@ def setup_zorro():
                             'Programming Language :: Python :: 2.7',
                             'Programming Language :: Python :: 3',
                             'Programming Language :: Python :: 3.4',
+                            'Programming Language :: Python :: 3.5',
                             
                             # OS
                             'Operating System :: POSIX',
